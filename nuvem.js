@@ -4,7 +4,7 @@
  * Sem login (ou sem internet) tudo continua salvo só no aparelho. */
 (function () {
   'use strict';
-  const CFG = { apiKey: 'AIzaSyBEyAvAfWjqMMORxxgBZlpxUY3dnVCJ19A', authDomain: 'simulados-enem-b7456.firebaseapp.com', projectId: 'simulados-enem-b7456', storageBucket: 'simulados-enem-b7456.firebasestorage.app', messagingSenderId: '537375938062', appId: '1:537375938062:web:c98d5456322a61cccece5f' };
+  const CFG = { apiKey: 'AIzaSyDLavs9nuI2tBXGcZdgzI-cBwpw-uaSBJM', authDomain: 'eletromaster.firebaseapp.com', projectId: 'eletromaster', storageBucket: 'eletromaster.firebasestorage.app', messagingSenderId: '534560044012', appId: '1:534560044012:web:b9ca1f2840c850c7a206c9' };
   const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/', K_LOBBY = 'eletromaster.lobby';
   let auth = null, db = null, usuario = null, pronto = false, timer = null, enviados = {}, status = '';
   const el = id => document.getElementById(id);
