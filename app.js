@@ -361,7 +361,7 @@ function render() {
   }
   svg.innerHTML = h;
   atualizarBotoes();
-  renderPainel();
+  renderPainel(); ajustarPainel();
   renderDica();
 }
 
@@ -379,6 +379,18 @@ function renderDica() {
 }
 
 // ---------- painel inferior ----------
+// painel recolhível: toque na barrinha do topo esconde; botão ▴ traz de volta (desenho nunca recolhe)
+let painelMin = false;
+function ajustarPainel() {
+  const p = $('#painel'), b = $('#btnPainel'), pode = p.classList.contains('aberto') && p.dataset.tipo !== 'desenho';
+  if (!pode) painelMin = false;
+  p.classList.toggle('min', painelMin && pode);
+  b.hidden = !(painelMin && pode);
+  let g = p.querySelector('.puxador');
+  if (pode && !g) { g = document.createElement('button'); g.className = 'puxador'; g.setAttribute('aria-label', 'Ocultar detalhes'); g.innerHTML = '<span></span>▾ Ocultar'; g.onclick = () => { painelMin = true; ajustarPainel(); render(); }; p.prepend(g); }
+  if (!pode && g) g.remove();
+}
+$('#btnPainel').onclick = () => { painelMin = false; ajustarPainel(); render(); };
 function renderPainel() {
   const p = $('#painel');
   if (modo === 'desenhar') {
@@ -1066,7 +1078,7 @@ function legendaPontos() {
 
 // ---------- início ----------
 renderLista();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=27').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=28').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
