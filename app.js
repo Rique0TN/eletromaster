@@ -233,7 +233,7 @@ function enquadrar() {
 }
 $('#btnCentralizar').onclick = () => { enquadrar(); render(); };
 // v29: camadas da planta (mostrar/ocultar cada tipo de marcação)
-const CAMADAS = [['cotas', '📏 Medidas das paredes'], ['nomes', '🏷️ Nome e área dos cômodos'], ['cargas', '💡 Cargas (luz, TUG, TUE)'], ['pontos', '🔌 Tomadas, interruptores e quadro'], ['portas', '🚪 Portas']];
+const CAMADAS = [['cotas', '📏 Medidas das paredes'], ['nomes', '🏷️ Nome e área dos cômodos'], ['cargas', '💡 Cargas (luz, TUG, TUE)'], ['pontos', '🔌 Tomadas, interruptores e quadro'], ['portas', '🚪 Portas, janelas e vãos']];
 function cam(k) { if (!banco.camadas) banco.camadas = { cotas: !banco.ocultarCotas }; return banco.camadas[k] !== false; }
 function marcarCotas() { const b = $('#btnCotas'), oc = CAMADAS.filter(([k]) => !cam(k)).length; b.style.opacity = oc ? .6 : 1; b.textContent = oc ? '👁' + oc : '👁'; }
 function abrirCamadas() {
@@ -291,6 +291,8 @@ function imantar(w, ref, excetoId, mult = 1) {
 }
 
 // ---------- portas ----------
+// v41: tipos de abertura (porta de giro, dupla, de correr, vão livre, arco, janela)
+const TIPOS_ABERT = [['giro', '🚪 Porta'], ['dupla', '🚪🚪 Porta dupla'], ['correr', '↔️ Porta de correr'], ['vao', '▯ Vão livre'], ['arco', '⌒ Arco'], ['janela', '🪟 Janela']];
 // porta = { id, parede, pos (m do canto inicial até o centro), largura, fora (abre pra fora), inverter (dobradiça do outro lado) }
 function geoPorta(c, pt) {
   const n = c.pts.length, a = c.pts[pt.parede % n], b = c.pts[(pt.parede + 1) % n], L = dist(a, b);
@@ -311,7 +313,19 @@ function svgPorta(c, pt, destaque) {
   const folha = tela([g.h[0] + g.nrm[0] * g.w, g.h[1] + g.nrm[1] * g.w]);
   let arco = [];
   for (let k = 0; k <= 16; k++) { const t = k / 16 * Math.PI / 2, q = [g.h[0] + g.w * (Math.cos(t) * g.nrm[0] + Math.sin(t) * g.u[0]), g.h[1] + g.w * (Math.cos(t) * g.nrm[1] + Math.sin(t) * g.u[1])]; arco.push(tela(q).map(v => v.toFixed(1)).join(',')); }
-  const cor = destaque ? '#ffc531' : '#e8eef7';
+  const cor = destaque ? '#ffc531' : '#e8eef7', tp = pt.tipo || 'giro', L = (p, q) => { const P = tela(p), Q = tela(q); return `<line x1="${P[0].toFixed(1)}" y1="${P[1].toFixed(1)}" x2="${Q[0].toFixed(1)}" y2="${Q[1].toFixed(1)}"`; };
+  const of = (p, k) => [p[0] + g.nrm[0] * k, p[1] + g.nrm[1] * k], fundo = `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="#0d1626" stroke-width="7"/>`;
+  if (tp !== 'giro') {
+    const ombro = p => `${L(of(p, -0.12), of(p, 0.12))} stroke="${cor}" stroke-width="2.5"/>`;
+    if (tp === 'vao' || tp === 'arco') return fundo + ombro(g.p0) + ombro(g.p1) + (tp === 'arco' ? `${L(g.p0, g.p1)} stroke="${cor}" stroke-width="1.3" stroke-dasharray="6 4"/>` : '');
+    if (tp === 'janela') return fundo + ombro(g.p0) + ombro(g.p1) + [-0.06, 0, 0.06].map(k => `${L(of(g.p0, k), of(g.p1, k))} stroke="#7ee0ff" stroke-width="${k ? 1.6 : 1}"/>`).join('');
+    if (tp === 'correr') { const m = [(g.p0[0] + g.p1[0]) / 2, (g.p0[1] + g.p1[1]) / 2], s = pt.inverter ? -1 : 1; return fundo + ombro(g.p0) + ombro(g.p1) + `${L(of(g.p0, 0.05), of(m, 0.05))} stroke="${cor}" stroke-width="2.5"/>` + `${L(of(m, -0.05), of(g.p1, -0.05))} stroke="${cor}" stroke-width="2.5"/>`; }
+    if (tp === 'dupla') {
+      const w2 = g.w / 2, arc = (h, u) => { const r = []; for (let k = 0; k <= 12; k++) { const t = k / 12 * Math.PI / 2; r.push(tela([h[0] + w2 * (Math.cos(t) * g.nrm[0] + Math.sin(t) * u[0]), h[1] + w2 * (Math.cos(t) * g.nrm[1] + Math.sin(t) * u[1])]).map(v => v.toFixed(1)).join(',')); } return `<polyline points="${r.join(' ')}" fill="none" stroke="${cor}" stroke-width="1.3" stroke-dasharray="4 3"/>`; };
+      const dd = [(g.p1[0] - g.p0[0]) / g.w, (g.p1[1] - g.p0[1]) / g.w];
+      return fundo + `${L(g.p0, of(g.p0, w2))} stroke="${cor}" stroke-width="2.5"/>${L(g.p1, of(g.p1, w2))} stroke="${cor}" stroke-width="2.5"/>` + arc(g.p0, dd) + arc(g.p1, [-dd[0], -dd[1]]);
+    }
+  }
   return `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="#0d1626" stroke-width="7"/>
     <line x1="${H[0]}" y1="${H[1]}" x2="${folha[0]}" y2="${folha[1]}" stroke="${cor}" stroke-width="2.5"/>
     <polyline points="${arco.join(' ')}" fill="none" stroke="${cor}" stroke-width="1.3" stroke-dasharray="4 3"/>`;
@@ -460,23 +474,24 @@ function renderPainel() {
       <div class="linha"><label>Nova medida</label><input id="inParede" class="num" type="text" inputmode="decimal" value="${val}">
         <select id="selUn2"><option value="m" ${banco.unidade === 'm' ? 'selected' : ''}>m</option><option value="cm" ${banco.unidade === 'cm' ? 'selected' : ''}>cm</option></select>
         <button class="btn primario" id="btnAplicar">Aplicar</button><button class="btn" id="btnVoltarComodo">Cômodo</button></div>
-      ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}">🚪 Porta ${fmt(pt.largura)} m · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
-        <button class="btn pGirar">↻ Girar</button><button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button><button class="btn pInv">⇆ Lado</button><button class="btn perigo pExc">✕</button></div>` : '').join('')}
-      <div class="linha"><label>Porta</label><select id="selLargPorta">${[0.6, 0.7, 0.8, 0.9, 1.0, 1.2].map(v => `<option value="${v}" ${v === 0.8 ? 'selected' : ''}>${fmt(v)} m</option>`).join('')}</select>
-        <button class="btn" id="btnAddPorta">+ Adicionar porta</button></div>`;
+      ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}">${TIPOS_ABERT.find(x => x[0] === (pt.tipo || 'giro'))[1]} ${fmt(pt.largura)} m · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
+        ${!pt.tipo || pt.tipo === 'giro' ? `<button class="btn pGirar">↻ Girar</button><button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button><button class="btn pInv">⇆ Lado</button>` : pt.tipo === 'dupla' ? `<button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button>` : ''}<button class="btn perigo pExc">✕</button></div>` : '').join('')}
+      <div class="linha"><select id="selTipoAb">${TIPOS_ABERT.map(([k, n]) => `<option value="${k}" ${k === (banco.ultAb || 'giro') ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="selLargPorta">${[0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0].map(v => `<option value="${v}" ${v === (banco.ultLarg || 0.8) ? 'selected' : ''}>${fmt(v)} m</option>`).join('')}</select>
+        <button class="btn" id="btnAddPorta">+ Adicionar</button></div>`;
     p.querySelector('#btnAddPorta').onclick = () => {
       const w = parseFloat(p.querySelector('#selLargPorta').value);
       if (w > L + 1e-6) { aviso('A porta é maior que a parede.'); return; }
-      checkpoint(); c.portas = c.portas || []; c.portas.push({ id: uid(), parede: i, pos: L / 2, largura: w, fora: false, inverter: false }); gravar(); render();
+      const tp = p.querySelector('#selTipoAb').value; banco.ultAb = tp; banco.ultLarg = w; salvar();
+      checkpoint(); c.portas = c.portas || []; c.portas.push({ id: uid(), tipo: tp, parede: i, pos: L / 2, largura: w, fora: false, inverter: false }); gravar(); render();
     };
     p.querySelectorAll('.porta-linha').forEach(row => {
       const pt = c.portas[+row.dataset.k];
-      row.querySelector('.pGirar').onclick = () => { // 4 posições: dentro-esq, dentro-dir, fora-dir, fora-esq
+      if (row.querySelector('.pGirar')) row.querySelector('.pGirar').onclick = () => { // 4 posições: dentro-esq, dentro-dir, fora-dir, fora-esq
         checkpoint(); const k = (pt.fora ? 2 : 0) + ((pt.fora ? !pt.inverter : pt.inverter) ? 1 : 0), n = (k + 1) % 4;
         pt.fora = n >= 2; pt.inverter = pt.fora ? n === 2 : n === 1; gravar(); render();
       };
-      row.querySelector('.pFora').onclick = () => { checkpoint(); pt.fora = !pt.fora; gravar(); render(); };
-      row.querySelector('.pInv').onclick = () => { checkpoint(); pt.inverter = !pt.inverter; gravar(); render(); };
+      if (row.querySelector('.pFora')) row.querySelector('.pFora').onclick = () => { checkpoint(); pt.fora = !pt.fora; gravar(); render(); };
+      if (row.querySelector('.pInv')) row.querySelector('.pInv').onclick = () => { checkpoint(); pt.inverter = !pt.inverter; gravar(); render(); };
       row.querySelector('.pExc').onclick = () => { checkpoint(); c.portas.splice(+row.dataset.k, 1); gravar(); render(); };
       row.querySelector('.pPos').onchange = e => {
         const v = parseFloat(String(e.target.value).replace(',', '.'));
@@ -1440,7 +1455,7 @@ const TUTO = [
   ['⚡', 'Bem-vindo ao EletroMaster', 'Você desenha a planta da casa e o app calcula luz, tomadas, circuitos, fios e disjuntores pela NBR 5410, explicando o porquê de cada valor.'],
   ['📁', '1. Crie um projeto', 'Na tela inicial, toque em <b>+ Novo projeto</b> e dê um nome. Tudo fica salvo sozinho no aparelho e, se entrou com Google, na nuvem.'],
   ['✎', '2. Desenhe os cômodos', 'Use <b>▭ Retângulo</b> pra um cômodo pronto, ou <b>✎ Desenhar</b> e arraste o dedo parede por parede. Feche no ponto verde. Dá pra digitar a medida de cada parede.'],
-  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta. Arraste os cantos pra mexer.'],
+  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta, porta dupla, de correr, janela, vão livre ou arco. Arraste os cantos pra mexer.'],
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas. Em <b>🛣️ Rua e muro</b> você desenha a rua e o medidor fica no muro.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
   ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
@@ -1459,7 +1474,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=40').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=41').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
