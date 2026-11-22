@@ -709,8 +709,8 @@ function mostrarQuadro() {
     ${bloco('4️⃣ DR e DPS no quadro', ['O DR pode proteger um circuito sozinho ou um grupo de circuitos.', 'O DPS fica logo depois do disjuntor geral, ligado ao terra.'],
       [`${nDr} circuito(s) precisam de DR 30 mA. Opção simples: um DR geral de 30 mA com corrente ≥ ${g.inn} A, ou um DR para o grupo das áreas molhadas.`, `DPS sugerido: classe II, Uc ≥ ${dpsUc()} V (valores usuais de mercado, confirmar no projeto).`])}
     <p class="aviso">Regras da NBR 5410 explicadas com nossas palavras. A demanda e o disjuntor geral devem ser conferidos com a norma de fornecimento da Neoenergia Coelba. Ferramenta de apoio: o projeto oficial precisa de profissional habilitado e ART.</p>
-    <div class="botoes"><button class="btn" id="mVolta">← Cômodos</button><button class="btn" id="mCirc2">🔀 Circuitos</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mVolta').onclick = () => $('#btnComodos').onclick(); $('#mCirc2').onclick = mostrarCircuitos;
+    <div class="botoes"><button class="btn" id="mVolta">← Cômodos</button><button class="btn" id="mCirc2">🔀 Circuitos</button><button class="btn primario" id="mUnif">⚡ Unifilar</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mVolta').onclick = () => $('#btnComodos').onclick(); $('#mCirc2').onclick = mostrarCircuitos; $('#mUnif').onclick = mostrarUnifilar;
 }
 // ---------- explicação: o que a norma diz + como foi aplicado ----------
 function regraTUG(tipo) {
@@ -1138,6 +1138,49 @@ function alimentador() {
   while (k < CAP.length - 1 && queda(g.ib, L, CAP[k][0]) > QUEDA_ALIM) k++;
   return { L, ib: g.ib, inn: g.inn, sec: CAP[k][0], iz: CAP[k][1], secAmp: CAP[k0][0], dv: queda(g.ib, L, CAP[k][0]), dvAntes: queda(g.ib, L, CAP[k0][0]), porQueda: k > k0 };
 }
+// v34: diagrama unifilar (módulo 11) — medidor → disjuntor geral → DPS → DR → barramento → circuitos
+function mostrarUnifilar() {
+  const { lista, V } = circuitos(), g = geral(), al = alimentador(), res = reservaQd(lista.length);
+  if (!lista.length) { abrirModal('<h2>⚡ Diagrama unifilar</h2><div class="vazio">Desenhe os cômodos primeiro.</div><div class="botoes"><button class="btn" id="mCanc">Fechar</button></div>'); $('#mCanc').onclick = fecharModal; return; }
+  const comDR = lista.filter(c => c.dr), semDR = lista.filter(c => !c.dr), ord = [...semDR, ...comDR];
+  const passo = 74, x0 = 300, W = x0 + (ord.length + res) * passo + 40, yBar = 90, yDisj = 170, yFim = 420, H = 470, cor = '#e8eef7', am = '#ffc531';
+  const t = (x, y, s, o = {}) => `<text x="${x}" y="${y}" font-size="${o.f || 11}" ${o.b ? 'font-weight="700"' : ''} fill="${o.c || cor}" text-anchor="${o.a || 'middle'}">${s}</text>`;
+  const disj = (x, y, n) => `<line x1="${x}" y1="${y - 14}" x2="${x}" y2="${y - 6}" stroke="${cor}" stroke-width="2"/><path d="M${x},${y - 6} L${x + 8},${y + 8}" stroke="${cor}" stroke-width="2"/><line x1="${x}" y1="${y + 8}" x2="${x}" y2="${y + 14}" stroke="${cor}" stroke-width="2"/><circle cx="${x}" cy="${y - 6}" r="2.2" fill="${cor}"/>${t(x - 10, y + 4, n + ' A', { a: 'end', b: 1, c: am })}`;
+  const fios = (x, y) => `<path d="M${x - 6},${y + 5}L${x + 6},${y - 5}M${x - 6},${y + 11}L${x + 6},${y + 1}" stroke="${cor}" stroke-width="1.4"/><path d="M${x - 6},${y + 17}L${x + 6},${y + 7}" stroke="#7ee07e" stroke-width="1.4"/>`;
+  let s = '';
+  // entrada
+  s += `<rect x="20" y="${yBar - 28}" width="56" height="56" rx="4" fill="#0d1626" stroke="#7ee0ff" stroke-width="2"/><path d="M20,${yBar - 28}L76,${yBar + 28}M76,${yBar - 28}L20,${yBar + 28}" stroke="#7ee0ff" stroke-width="1.2"/>${t(48, yBar + 46, 'Medidor', { c: '#7ee0ff', b: 1 })}${t(48, yBar + 60, 'Coelba', { c: '#7ee0ff' })}`;
+  s += `<line x1="76" y1="${yBar}" x2="${x0 - 10}" y2="${yBar}" stroke="${cor}" stroke-width="3"/>`;
+  s += `${t(112, yBar - 34, `${fmt(al ? al.sec : g.sec, 1).replace(',0', '')} mm²`, { b: 1 })}${t(112, yBar - 20, al ? fmt(al.L, 1) + ' m' : 'alimentador')}${fios(112, yBar - 8)}`;
+  // geral (desenhado na horizontal)
+  s += `<rect x="150" y="${yBar - 12}" width="34" height="24" fill="#0d1626"/><path d="M152,${yBar} L162,${yBar} L178,${yBar - 10}" stroke="${cor}" stroke-width="2.4" fill="none"/><circle cx="162" cy="${yBar}" r="2.4" fill="${cor}"/>${t(170, yBar + 30, `Geral ${g.inn} A`, { b: 1, c: am })}`;
+  // DPS
+  s += `<line x1="212" y1="${yBar}" x2="212" y2="${yBar + 40}" stroke="${cor}" stroke-width="1.6"/><rect x="202" y="${yBar + 40}" width="20" height="28" fill="#0d1626" stroke="${cor}" stroke-width="1.6"/><path d="M212,${yBar + 44}L212,${yBar + 52}L207,${yBar + 56}L217,${yBar + 58}L212,${yBar + 64}" stroke="${am}" fill="none" stroke-width="1.4"/><line x1="212" y1="${yBar + 68}" x2="212" y2="${yBar + 84}" stroke="#7ee07e" stroke-width="1.6"/><path d="M202,${yBar + 84}H222M205,${yBar + 89}H219M209,${yBar + 94}H215" stroke="#7ee07e" stroke-width="1.6"/>${t(232, yBar + 58, `DPS ${dpsUc()} V`, { a: 'start', f: 10 })}`;
+  // barramento
+  const xEnd = x0 + (ord.length + res - 1) * passo + 20;
+  s += `<line x1="${x0 - 10}" y1="${yBar}" x2="${xEnd}" y2="${yBar}" stroke="${cor}" stroke-width="4"/>${t(x0 + 10, yBar - 10, `Barramento ${V} V`, { a: 'start', f: 10 })}`;
+  ord.forEach((c, i) => {
+    const x = x0 + i * passo;
+    s += `<line x1="${x}" y1="${yBar}" x2="${x}" y2="${yDisj - 14}" stroke="${cor}" stroke-width="2"/>${c.dr ? '' : ''}${disj(x, yDisj, c.inn)}<line x1="${x}" y1="${yDisj + 14}" x2="${x}" y2="${yFim}" stroke="${cor}" stroke-width="2"/>${fios(x, yDisj + 40)}`;
+    s += `${t(x - 6, yDisj + 76, fmt(c.sec, 1).replace(',0', '') + ' mm²', { b: 1, a: 'end' })}${t(x, yFim + 16, 'C' + c.n, { b: 1, c: am, f: 12 })}`;
+    const tp = c.tipo === 'Iluminação' ? 'Luz' : c.tipo.startsWith('TUG (') ? 'TUG coz./serv.' : c.tipo;
+    s += `<g transform="translate(${x + 14},${yFim - 6}) rotate(-90)">${t(0, 0, `${tp} · ${c.va} VA`, { a: 'start', f: 10 })}</g><g transform="translate(${x + 27},${yFim - 6}) rotate(-90)">${t(0, 0, c.desc.replace(/<[^>]+>/g, '').slice(0, 24), { a: 'start', f: 9, c: '#9fb3cc' })}</g>`;
+  });
+  // DR (um para o grupo de áreas molhadas)
+  if (comDR.length) {
+    let xa = x0 + semDR.length * passo - 18, xb = x0 + (ord.length - 1) * passo + 18; if (xb - xa < 200) { const m = (xa + xb) / 2; xa = m - 100; xb = m + 100; }
+    s += `<rect x="${xa}" y="${yBar + 18}" width="${xb - xa}" height="26" rx="6" fill="#16243b" stroke="#ff7a59" stroke-width="1.6"/>${t((xa + xb) / 2, yBar + 35, `DR 30 mA · ${comDR.length} circuito(s) · ≥ ${Math.max(...comDR.map(c => c.inn)) < 25 ? 25 : 40} A`, { c: '#ff9a7a', b: 1, f: 10 })}`;
+  }
+  for (let r = 0; r < res; r++) { const x = x0 + (ord.length + r) * passo; s += `<line x1="${x}" y1="${yBar}" x2="${x}" y2="${yDisj + 14}" stroke="#5b6b82" stroke-width="1.6" stroke-dasharray="5 4"/>${t(x, yDisj + 34, 'Reserva', { c: '#7f8ea6', f: 10 })}`; }
+  s += `<line x1="${x0 - 30}" y1="${H - 14}" x2="${x0 - 18}" y2="${H - 24}" stroke="${cor}"/>${t(x0 - 12, H - 15, 'fase e neutro', { a: 'start', f: 10 })}<line x1="${x0 + 70}" y1="${H - 14}" x2="${x0 + 82}" y2="${H - 24}" stroke="#7ee07e"/>${t(x0 + 88, H - 15, 'terra (PE)', { a: 'start', f: 10 })}`;
+  abrirModal(`<h2>⚡ Diagrama unifilar · ${esc(proj.nome)}</h2>
+    <div style="font-size:13px;opacity:.8;margin-bottom:6px">Arraste pro lado pra ver todos os circuitos. Cada tracinho no fio é um condutor: fase e neutro (brancos) e terra (verde).</div>
+    <div style="overflow:auto;border:1px solid var(--linha);border-radius:10px;background:#0d1626"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${s}</svg></div>
+    <div class="exp-norma" style="margin-top:10px"><b>📘 Como ler</b><ul class="passos"><li>O unifilar mostra a instalação com <b>uma linha só</b> por circuito; os tracinhos dizem quantos fios passam ali.</li><li>Ordem no quadro: medidor (Coelba) → alimentador → <b>disjuntor geral</b> → <b>DPS</b> ligado ao terra → barramento → <b>disjuntor de cada circuito</b>.</li><li>Os circuitos de áreas molhadas ficam juntos sob um <b>DR 30 mA</b>. Também dá pra usar um DR por circuito ou um DR geral.</li><li>Os espaços tracejados são a <b>reserva</b> pra circuitos futuros.</li></ul></div>
+    <p class="aviso">Diagrama simplificado, gerado pelo app. O unifilar do projeto oficial precisa ser revisado e assinado por profissional habilitado (ART).</p>
+    <div class="botoes"><button class="btn" id="mQd">📋 Quadro de cargas</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mQd').onclick = mostrarQuadro;
+}
 function legendaPontos() {
   const cor = '#e8eef7';
   const tri = alt => `<svg width="40" height="34"><polygon points="20,4 4,30 36,30" fill="${alt === 'al' ? cor : '#0d1626'}" stroke="${cor}" stroke-width="2"/>${alt === 'md' ? `<polygon points="20,4 4,30 20,30" fill="${cor}"/>` : ''}</svg>`;
@@ -1173,6 +1216,7 @@ function livroNormas() {
     it(qdc, 'Queda de tensão', 'Até 4% do quadro ao ponto mais longe; se passar, o app aumenta o fio. No alimentador (medidor → quadro) o app usa até 1%, somando no máximo 5% a partir da entrega da Coelba.', qdc ? '🔀 Circuitos (Dist. e Queda)' : 'coloque o ▣ Quadro na planta') +
     it(molh.length > 0, 'DR 30 mA', 'Proteção diferencial nos circuitos de áreas molhadas e externas (banheiro, cozinha, área de serviço, varanda, garagem...).', molh.length ? molh.map(c => esc(c.nome)).join(', ') : 'nenhum cômodo molhado ainda') +
     it(tem, 'DPS', `Protetor de surto no quadro: classe II, In ≥ 20 kA, Uc ${tensao() === 220 ? 275 : 175} V.`, '📋 Quadro de cargas') +
+    it(tem, 'Diagrama unifilar', 'Medidor → geral → DPS → DR → barramento → disjuntor e fio de cada circuito, com a reserva.', '📋 Quadro → ⚡ Unifilar') +
     it(tem, 'Espaço reserva no quadro', 'Até 6 circuitos: 2 · 7 a 12: 3 · 13 a 30: 4 · mais de 30: 15%.', '📋 Quadro de cargas') +
     it(ints || tomCol, 'Cores dos condutores', 'Neutro azul-claro, proteção (terra) verde-amarelo ou verde. Fase e retorno em outras cores.', 'Legenda dos pontos'));
   h += sec('Neoenergia Coelba · DIS-NOR-030', 'Norma da distribuidora da Bahia para fornecimento em baixa tensão.',
@@ -1194,7 +1238,7 @@ const TUTO = [
   ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta. Arraste os cantos pra mexer.'],
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
-  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR) e <b>📋 Quadro de cargas</b>.'],
+  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>.'],
   ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas.'],
   ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
   ['⚠️', 'Importante', 'O EletroMaster é ferramenta de apoio. Projeto oficial precisa de profissional habilitado e ART. Bom trabalho!']
@@ -1210,7 +1254,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=33').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=34').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
