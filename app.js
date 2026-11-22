@@ -342,6 +342,7 @@ function render() {
   { const c = sel.comodo && comodo(sel.comodo); if (c && sel.parede != null) { const A = tela(c.pts[sel.parede]), B = tela(c.pts[(sel.parede + 1) % c.pts.length]); h += `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="#ffc531" stroke-width="6" stroke-linecap="round"/>`; } }
   if (cam('portas')) proj.comodos.forEach(c => (c.portas || []).forEach(pt => h += svgPorta(c, pt, c.id === sel.comodo && sel.parede === pt.parede)));
   if (cam('pontos') || modo === 'pontos') proj.comodos.forEach(c => (c.pontos || []).forEach(q => h += svgPonto(c, q, modo === 'pontos' && selPonto === q.id)));
+  if (modo === 'pontos') { const cc = centroCargas(); if (cc) { const P = tela(cc); h += `<g transform="translate(${P[0].toFixed(1)},${P[1].toFixed(1)})" opacity=".85"><circle r="11" fill="none" stroke="#ff7a59" stroke-width="2" stroke-dasharray="4 3"/><path d="M-15,0H15M0,-15V15" stroke="#ff7a59" stroke-width="1.5"/><text y="-16" text-anchor="middle" font-size="10" font-weight="700" fill="#ff7a59">centro de cargas</text></g>`; } }
   proj.comodos.forEach(c => {
     const s = c.id === sel.comodo;
     // cotas das paredes: sempre na horizontal (fácil de ler) e um pouco pra dentro do cômodo
@@ -690,7 +691,7 @@ function geral() {
   return { d, ib, inn, sec: ok[0], iz: ok[1] };
 }
 function mostrarQuadro() {
-  const { lista, V } = circuitos(), g = geral(), ls = arr => `<ul class="passos">${arr.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  const { lista, V } = circuitos(), g = geral(), al = alimentador(), ls = arr => `<ul class="passos">${arr.map(x => `<li>${x}</li>`).join('')}</ul>`;
   const bloco = (t, n, a) => `<h3 class="exp-t">${t}</h3><div class="exp-norma"><b>📘 O que a norma diz</b>${ls(n)}</div><div class="exp-aplic"><b>🧮 Como foi aplicado na sua casa</b>${ls(a)}</div>`;
   const col = c => c.tipo === 'Iluminação' ? 0 : c.tipo === 'TUE' ? 2 : 1, tot = [0, 0, 0];
   const linhas = lista.map(c => { const v = ['—', '—', '—']; v[col(c)] = c.va; tot[col(c)] += c.va; return `<tr><td class="n">${c.n}</td><td>${c.tipo}</td><td>${c.desc}</td><td class="n">${v[0]}</td><td class="n">${v[1]}</td><td class="n">${v[2]}</td><td class="n"><b>${c.va}</b></td><td class="n">${fmt(c.i, 1)}</td><td class="n">${fmt(c.sec, 1).replace(',0', '')}</td><td class="n">${c.inn}</td><td>${c.dr ? 'DR' : '—'}</td></tr>`; }).join('');
@@ -698,11 +699,11 @@ function mostrarQuadro() {
   abrirModal(`<h2>📋 Quadro de cargas de ${esc(proj.nome)}</h2>
     ${n ? `<table><tr><th class="n">Nº</th><th>Circuito</th><th>Atende</th><th class="n">Luz (VA)</th><th class="n">TUG (VA)</th><th class="n">TUE (VA)</th><th class="n">Total (VA)</th><th class="n">Ib (A)</th><th class="n">Fio (mm²)</th><th class="n">Disj. (A)</th><th>DR</th></tr>${linhas}
     <tr class="total"><td></td><td>Total</td><td>${n} circuito(s)</td><td class="n">${tot[0]}</td><td class="n">${tot[1]}</td><td class="n">${tot[2]}</td><td class="n">${total}</td><td colspan="4"></td></tr></table>` : '<div class="vazio">Desenhe os cômodos primeiro.</div>'}
-    <div class="exp-aplic" style="margin:8px 0;font-size:15px">Tensão: <b>${V} V</b> monofásico · Demanda: <b>${fmt(g.d.dVA / 1000, 2)} kVA</b> → <b>${fmt(g.ib, 1)} A</b><br>Disjuntor geral: <b>${g.inn} A</b> · Fio do quadro (alimentador): <b>${fmt(g.sec, 1).replace(',0', '')} mm²</b> (aguenta ${g.iz} A)<br>Espaços no quadro: <b>${n}</b> circuitos + <b>${res}</b> reserva = <b>${n + res}</b> disjuntores</div>
+    <div class="exp-aplic" style="margin:8px 0;font-size:15px">Tensão: <b>${V} V</b> monofásico · Demanda: <b>${fmt(g.d.dVA / 1000, 2)} kVA</b> → <b>${fmt(g.ib, 1)} A</b><br>Disjuntor geral: <b>${g.inn} A</b> · Fio do quadro (alimentador): <b>${fmt((al ? al.sec : g.sec), 1).replace(',0', '')} mm²</b>${al ? ` · ${fmt(al.L, 1)} m do medidor · queda ${fmt(al.dv, 2)}%` : ` (aguenta ${g.iz} A)`}<br>Espaços no quadro: <b>${n}</b> circuitos + <b>${res}</b> reserva = <b>${n + res}</b> disjuntores</div>
     ${bloco('1️⃣ O que é o quadro de cargas', ['É a tabela que resume <b>todos os circuitos</b> da casa: o que cada um atende, a potência separada em iluminação, TUG e TUE, a corrente, o fio e o disjuntor.', 'É ela que o eletricista usa pra montar o quadro e que vai no projeto junto com a planta e o diagrama unifilar.'],
       [`${n} circuito(s): luz ${tot[0]} VA, TUG ${tot[1]} VA, TUE ${tot[2]} VA. Potência instalada: <b>${total} VA</b>.`, 'Fio e disjuntor de cada linha vêm da tela 🔀 Circuitos (regra Ib ≤ In ≤ Iz e queda de tensão).'])}
     ${bloco('2️⃣ Disjuntor geral', ['O disjuntor geral protege o <b>alimentador</b>, o fio que vem do medidor até o quadro.', 'Ele é escolhido pela <b>demanda</b> (o que liga junto de verdade), e não pela soma de tudo, pela mesma regra Ib ≤ In ≤ Iz.', 'O valor final também precisa bater com a <b>categoria de fornecimento da Coelba</b> (padrão de entrada), que vem no módulo do padrão Coelba.'],
-      [`Demanda: ${fmt(g.d.dW, 0)} W ÷ 0,92 = ${fmt(g.d.dVA, 0)} VA → Ib = ${fmt(g.d.dVA, 0)} ÷ ${V} = <b>${fmt(g.ib, 1)} A</b>.`, `Primeiro disjuntor comercial acima: <b>${g.inn} A</b>.`, `Fio que aguenta ≥ ${g.inn} A sozinho no eletroduto (sem fator de agrupamento): <b>${fmt(g.sec, 1).replace(',0', '')} mm²</b> (Iz = ${g.iz} A) ✔.`])}
+      [`Demanda: ${fmt(g.d.dW, 0)} W ÷ 0,92 = ${fmt(g.d.dVA, 0)} VA → Ib = ${fmt(g.d.dVA, 0)} ÷ ${V} = <b>${fmt(g.ib, 1)} A</b>.`, `Primeiro disjuntor comercial acima: <b>${g.inn} A</b>.`, `Fio que aguenta ≥ ${g.inn} A sozinho no eletroduto (sem fator de agrupamento): <b>${fmt(g.sec, 1).replace(',0', '')} mm²</b> (Iz = ${g.iz} A) ✔.`, ...(al ? [`Distância medidor → quadro: em "L" pelas paredes + 2 m de subidas/descidas = <b>${fmt(al.L, 1)} m</b>.`, `Queda no alimentador: o app usa até <b>1%</b> aqui, pra somar no máximo 5% com os 4% dos circuitos (a NBR 5410 limita a 5% a partir do ponto de entrega da Coelba e 4% nos circuitos terminais).`, al.porQueda ? `Com ${fmt(al.secAmp, 1).replace(',0', '')} mm² a queda seria ${fmt(al.dvAntes, 2)}% → o fio subiu pra <b>${fmt(al.sec, 1).replace(',0', '')} mm²</b> e ficou ${fmt(al.dv, 2)}% ✔.` : `Com ${fmt(al.sec, 1).replace(',0', '')} mm² a queda fica ${fmt(al.dv, 2)}% ✔.`] : ['Coloque o ⊠ Medidor e o ▣ Quadro na planta (modo 🔌 Pontos) pra o app medir a distância e a queda de tensão do alimentador.'])])}
     ${bloco('3️⃣ Espaço reserva', ['O quadro deve ter <b>espaço livre para circuitos futuros</b>, conforme o número de circuitos: até 6 → 2 espaços · 7 a 12 → 3 · 13 a 30 → 4 · acima de 30 → 15%.'],
       [`${n} circuito(s) → <b>${res}</b> espaço(s) reserva. Quadro com pelo menos <b>${n + res}</b> posições, mais o geral${nDr ? ', o(s) DR' : ''} e o DPS.`])}
     ${bloco('4️⃣ DR e DPS no quadro', ['O DR pode proteger um circuito sozinho ou um grupo de circuitos.', 'O DPS fica logo depois do disjuntor geral, ligado ao terra.'],
@@ -1001,7 +1002,7 @@ function toque(s) {
 // ---------- pontos na planta: tomadas e interruptores (simbologia usual NBR 5444) ----------
 let selPonto = null, ferramenta = 'bx', dupla = false;
 const ALT = { bx: ['Baixa', '0,30 m'], md: ['Média', '1,30 m'], al: ['Alta', '2,00 m'] };
-const FERR = [['bx', '▽ Baixa'], ['md', '◭ Média'], ['al', '▲ Alta'], ['int', '● Interruptor'], ['par', '◐ Paralelo'], ['qdc', '▣ Quadro']];
+const FERR = [['bx', '▽ Baixa'], ['md', '◭ Média'], ['al', '▲ Alta'], ['int', '● Interruptor'], ['par', '◐ Paralelo'], ['qdc', '▣ Quadro'], ['med', '⊠ Medidor']];
 function paredeMaisPerto(c, w) {
   let melhor = null, md = Infinity;
   c.pts.forEach((a, i) => {
@@ -1022,6 +1023,10 @@ function svgPonto(c, q, destaque) {
   const g = geoPonto(c, q); if (!g) return '';
   const P = tela(g.m), off = 16, C = [P[0] + g.nrm[0] * off, P[1] + g.nrm[1] * off], cor = destaque ? '#ffc531' : '#e8eef7';
   let h = `<line x1="${P[0]}" y1="${P[1]}" x2="${C[0]}" y2="${C[1]}" stroke="${cor}" stroke-width="1.6"/>`;
+  if (q.k === 'med') {
+    const a = Math.atan2(g.d[1], g.d[0]) * 180 / Math.PI;
+    return `<g transform="translate(${P[0].toFixed(1)},${P[1].toFixed(1)}) rotate(${a.toFixed(1)})"><rect x="-12" y="-9" width="24" height="18" fill="#0d1626" stroke="${cor}" stroke-width="1.8"/><path d="M-12,-9L12,9M12,-9L-12,9" stroke="${cor}" stroke-width="1.4"/></g><text x="${C[0] + g.nrm[0] * 10}" y="${C[1] + g.nrm[1] * 10 + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#7ee0ff">MEDIDOR</text>`;
+  }
   if (q.k === 'qdc') {
     const a = Math.atan2(g.d[1], g.d[0]) * 180 / Math.PI;
     return `<g transform="translate(${P[0].toFixed(1)},${P[1].toFixed(1)}) rotate(${a.toFixed(1)})"><rect x="-14" y="-6" width="28" height="12" fill="#0d1626" stroke="${cor}" stroke-width="1.8"/><polygon points="-14,-6 14,-6 -14,6" fill="${cor}"/></g><text x="${C[0] + g.nrm[0] * 8}" y="${C[1] + g.nrm[1] * 8 + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#ffc531">QDC</text>`;
@@ -1058,8 +1063,8 @@ function colocarPonto(w) {
   if (!c) { selPonto = null; aviso('Toque dentro de um cômodo, perto da parede.'); render(); return; }
   const m = paredeMaisPerto(c, w); if (!m) return;
   checkpoint(); c.pontos = c.pontos || [];
-  if (ferramenta === 'qdc') proj.comodos.forEach(o => { if (o.pontos) o.pontos = o.pontos.filter(x => x.k !== 'qdc'); });
-  const q = ferramenta === 'qdc' ? { id: uid(), k: 'qdc', parede: m.i, pos: m.pos } : ferramenta === 'int' || ferramenta === 'par' ? { id: uid(), k: ferramenta, parede: m.i, pos: m.pos } : { id: uid(), k: 'tom', alt: ferramenta, dupla, parede: m.i, pos: m.pos };
+  if (ferramenta === 'qdc' || ferramenta === 'med') proj.comodos.forEach(o => { if (o.pontos) o.pontos = o.pontos.filter(x => x.k !== ferramenta); });
+  const q = ferramenta === 'qdc' || ferramenta === 'med' ? { id: uid(), k: ferramenta, parede: m.i, pos: m.pos } : ferramenta === 'int' || ferramenta === 'par' ? { id: uid(), k: ferramenta, parede: m.i, pos: m.pos } : { id: uid(), k: 'tom', alt: ferramenta, dupla, parede: m.i, pos: m.pos };
   c.pontos.push(q); selPonto = q.id; sel = { comodo: c.id, parede: null }; gravar(); render();
 }
 function achaPonto(id) { for (const c of proj.comodos) { const q = (c.pontos || []).find(x => x.id === id); if (q) return { c, q }; } return null; }
@@ -1068,10 +1073,12 @@ function painelPontos(p) {
   const ach = selPonto && achaPonto(selPonto), c = ach ? ach.c : sel.comodo && comodo(sel.comodo);
   let h = `<div class="linha">${FERR.map(([k, n]) => `<button class="btn ${ferramenta === k ? 'primario' : ''}" data-ferr="${k}">${n}</button>`).join('')}<button class="btn ${dupla ? 'primario' : ''}" id="btnDupla">${dupla ? '☑' : '☐'} Dupla</button><button class="btn" id="btnLegenda">Legenda</button></div>`;
   if (!proj.comodos.some(o => (o.pontos || []).some(x => x.k === 'qdc'))) h += `<div class="linha medidas">⚠️ Coloque o quadro (▣ Quadro) pra calcular a distância e a queda de tensão.</div>`;
+  if (proj.comodos.length) { const al = alimentador(); h += `<div class="linha"><button class="btn" id="btnSugQdc">🎯 Sugerir lugar do quadro</button>${al ? `<span class="medidas"> Medidor → quadro: <b>${fmt(al.L, 1)} m</b> · fio <b>${fmt(al.sec, 1).replace(',0', '')} mm²</b> · queda ${fmt(al.dv, 2)}%</span>` : '<span class="medidas"> Coloque o ⊠ Medidor e o ▣ Quadro pra calcular o fio entre eles.</span>'}</div>`; }
   if (c) { const t = tug(c), ni = (c.pontos || []).filter(q => q.k === 'int' || q.k === 'par').length; h += `<div class="linha medidas">${esc(c.nome)}: tomadas <b>${t.col}</b> (mín. ${t.min} · recom. até ${t.max})${t.col < t.min ? ' ⚠️ faltam ' + (t.min - t.col) : t.col > t.max ? ' · acima do recomendado' : ' ✔'} · interruptores <b>${ni}</b> (luz "${letraLuz(c)}")</div>`; }
   if (ach) {
     const q = ach.q;
-    if (q.k === 'qdc') h += `<div class="linha medidas">▣ Quadro de distribuição (QDC) · arraste pra mudar de lugar <button class="btn perigo" id="pExc">✕ Excluir</button></div>`;
+    if (q.k === 'med') h += `<div class="linha medidas">⊠ Medidor / padrão de entrada Coelba · fica no muro ou na fachada, virado pra rua · arraste pra mudar <button class="btn perigo" id="pExc">✕ Excluir</button></div>`;
+    else if (q.k === 'qdc') h += `<div class="linha medidas">▣ Quadro de distribuição (QDC) · arraste pra mudar de lugar <button class="btn perigo" id="pExc">✕ Excluir</button></div>`;
     else h += `<div class="linha">${q.k === 'tom' ? `Tomada <select id="pAlt">${Object.entries(ALT).map(([k, [n, a]]) => `<option value="${k}" ${q.alt === k ? 'selected' : ''}>${n} (${a})</option>`).join('')}</select><select id="pDupla"><option value="0" ${q.dupla ? '' : 'selected'}>Simples</option><option value="1" ${q.dupla ? 'selected' : ''}>Dupla</option></select>` : `Interruptor <select id="pTipoInt"><option value="int" ${q.k === 'int' ? 'selected' : ''}>Simples</option><option value="par" ${q.k === 'par' ? 'selected' : ''}>Paralelo (three-way)</option></select>`}
       <button class="btn perigo" id="pExc">✕ Excluir</button></div>`;
     if (q.k === 'tom') { const sl = tomSlots(ach.c, tug(ach.c).n).find(x => x.q === q); h += `<div class="linha medidas">🔌 Aparelhos nesta tomada: ${(q.ap || []).length ? q.ap.map(u => `<span class="chip">${esc(u.nome)} ${u.w} W <button class="x" data-apx="${u.id}">✕</button></span>`).join(' ') : 'nenhum'} <button class="btn" id="pAp">+ Aparelho</button>${sl ? `<br>Carga usada: <b>${sl.va} VA</b> (norma ${sl.base} VA${sl.ap ? ` · aparelhos ${sl.ap} VA` : ''}; vale o maior)` : ''}</div>`; }
@@ -1079,6 +1086,7 @@ function painelPontos(p) {
   p.innerHTML = h;
   p.querySelectorAll('[data-ferr]').forEach(b => b.onclick = () => { ferramenta = b.dataset.ferr; selPonto = null; render(); });
   p.querySelector('#btnLegenda').onclick = legendaPontos;
+  const sq = p.querySelector('#btnSugQdc'); if (sq) sq.onclick = sugerirQdc;
   p.querySelector('#btnDupla').onclick = () => { dupla = !dupla; if (ferramenta === 'int' || ferramenta === 'par') ferramenta = 'bx'; render(); };
   if (ach) {
     const q = ach.q, a = p.querySelector('#pAlt'), ti = p.querySelector('#pTipoInt');
@@ -1103,6 +1111,32 @@ function novoAparelho(q) {
   s.onchange = fill; w.oninput = info; fill();
   $('#mCanc').onclick = fecharModal;
   $('#mOk').onclick = () => { const e = eq(), W = Math.round(+String(w.value).replace(',', '.')); if (!(W > 0)) return aviso('Digite a potência em W'); checkpoint(); (q.ap = q.ap || []).push({ id: uid(), eq: e[0], nome: nm.value.trim() || e[1], w: W, fp: e[3] }); fecharModal(); gravar(); render(); };
+}
+// v33: centro de cargas, sugestão do QDC e alimentador medidor → QDC
+function centroCargas() {
+  let s = 0, x = 0, y = 0;
+  proj.comodos.forEach(c => { const va = iluminacao(c.pts).va + tug(c).va + tueTotal(c), ct = centroide(c.pts); s += va; x += va * ct[0]; y += va * ct[1]; });
+  return s ? [x / s, y / s] : null;
+}
+function sugerirQdc() {
+  const cc = centroCargas(); if (!cc) return;
+  let c = proj.comodos.slice().reverse().find(o => dentro(cc, o.pts));
+  if (!c) c = proj.comodos.reduce((b, o) => !b || dist(centroide(o.pts), cc) < dist(centroide(b.pts), cc) ? o : b, null);
+  const m = paredeMaisPerto(c, cc); if (!m) return;
+  checkpoint(); proj.comodos.forEach(o => { if (o.pontos) o.pontos = o.pontos.filter(x => x.k !== 'qdc'); });
+  const q = { id: uid(), k: 'qdc', parede: m.i, pos: m.pos }; (c.pontos = c.pontos || []).push(q); selPonto = q.id; sel = { comodo: c.id, parede: null };
+  gravar(); render();
+  aviso(`Quadro sugerido em ${c.nome}, na parede mais perto do centro de cargas. Evite banheiro e atrás de porta; arraste se precisar.`);
+}
+const QUEDA_ALIM = 1; // % no alimentador (somado aos 4% dos circuitos, fica até 5% a partir do medidor)
+function alimentador() {
+  let M = null, Q = null;
+  proj.comodos.forEach(c => (c.pontos || []).forEach(q => { const g = (q.k === 'med' || q.k === 'qdc') && geoPonto(c, q); if (g) { if (q.k === 'med') M = g.m; else Q = g.m; } }));
+  if (!M || !Q) return null;
+  const g = geral(), L = Math.abs(M[0] - Q[0]) + Math.abs(M[1] - Q[1]) + 2; // + 2 m de subidas/descidas nas caixas
+  let k = CAP.findIndex(([s]) => s === g.sec); if (k < 0) k = 0; const k0 = k;
+  while (k < CAP.length - 1 && queda(g.ib, L, CAP[k][0]) > QUEDA_ALIM) k++;
+  return { L, ib: g.ib, inn: g.inn, sec: CAP[k][0], iz: CAP[k][1], secAmp: CAP[k0][0], dv: queda(g.ib, L, CAP[k][0]), dvAntes: queda(g.ib, L, CAP[k0][0]), porQueda: k > k0 };
 }
 function legendaPontos() {
   const cor = '#e8eef7';
@@ -1136,7 +1170,7 @@ function livroNormas() {
     it(tem, 'Divisão em circuitos', 'Luz separada de tomadas; tomadas de cozinha, copa e área de serviço em circuitos só delas; cada TUE com o seu.', '🔀 Circuitos') +
     it(tem, 'Fio e disjuntor (Ib ≤ In ≤ Iz)', `Corrente do circuito ≤ disjuntor ≤ o que o fio aguenta (cobre, PVC, método B1, 30 °C), com fator de agrupamento de ${fmt(fca(), 2)} (${agrup()} circuito(s) no eletroduto).`, '🔀 Circuitos') +
     it(tem, 'Seção mínima dos fios', '1,5 mm² para iluminação e 2,5 mm² para tomadas.', '🔀 Circuitos') +
-    it(qdc, 'Queda de tensão', 'Até 4% do quadro ao ponto mais longe; se passar, o app aumenta o fio.', qdc ? '🔀 Circuitos (Dist. e Queda)' : 'coloque o ▣ Quadro na planta') +
+    it(qdc, 'Queda de tensão', 'Até 4% do quadro ao ponto mais longe; se passar, o app aumenta o fio. No alimentador (medidor → quadro) o app usa até 1%, somando no máximo 5% a partir da entrega da Coelba.', qdc ? '🔀 Circuitos (Dist. e Queda)' : 'coloque o ▣ Quadro na planta') +
     it(molh.length > 0, 'DR 30 mA', 'Proteção diferencial nos circuitos de áreas molhadas e externas (banheiro, cozinha, área de serviço, varanda, garagem...).', molh.length ? molh.map(c => esc(c.nome)).join(', ') : 'nenhum cômodo molhado ainda') +
     it(tem, 'DPS', `Protetor de surto no quadro: classe II, In ≥ 20 kA, Uc ${tensao() === 220 ? 275 : 175} V.`, '📋 Quadro de cargas') +
     it(tem, 'Espaço reserva no quadro', 'Até 6 circuitos: 2 · 7 a 12: 3 · 13 a 30: 4 · mais de 30: 15%.', '📋 Quadro de cargas') +
@@ -1176,7 +1210,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=32').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=33').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
