@@ -290,6 +290,20 @@ function imantar(w, ref, excetoId, mult = 1) {
   return [g(x), g(y)];
 }
 
+// v42: cômodos conjugados (ex. cozinha americana): tira a parede, mantém a divisa tracejada e os cálculos separados
+function paredesCoincidentes(c, i) {
+  const a = c.pts[i], b = c.pts[(i + 1) % c.pts.length], out = [];
+  proj.comodos.forEach(o => { if (o === c) return; o.pts.forEach((p, j) => { const q = o.pts[(j + 1) % o.pts.length];
+    if (distSeg(p, a, b) < 0.02 && distSeg(q, a, b) < 0.02 || distSeg(a, p, q) < 0.02 && distSeg(b, p, q) < 0.02) out.push([o, j]); }); });
+  return out;
+}
+function alternarParede(c, i) {
+  checkpoint(); const tira = !(c.abertas || []).includes(i);
+  const set = (o, j) => { o.abertas = (o.abertas || []).filter(x => x !== j); if (tira) o.abertas.push(j); if (!o.abertas.length) delete o.abertas; };
+  set(c, i); const viz = paredesCoincidentes(c, i); viz.forEach(([o, j]) => set(o, j));
+  gravar(); render();
+  aviso(tira ? `Parede removida${viz.length ? ' entre ' + c.nome + ' e ' + viz.map(([o]) => o.nome).join(', ') : ''}. Cada lado continua sendo um cômodo, com seus cálculos.` : 'Parede de volta.');
+}
 // ---------- portas ----------
 // v41: tipos de abertura (porta de giro, dupla, de correr, vão livre, arco, janela)
 const TIPOS_ABERT = [['giro', '🚪 Porta'], ['dupla', '🚪🚪 Porta dupla'], ['correr', '↔️ Porta de correr'], ['vao', '▯ Vão livre'], ['arco', '⌒ Arco'], ['janela', '🪟 Janela']];
@@ -352,7 +366,12 @@ function render() {
   proj.comodos.forEach(c => {
     const cor = CORES[c.tipo] || '#b0bccd', s = c.id === sel.comodo;
     const d = c.pts.map(p => tela(p).map(v => v.toFixed(1)).join(',')).join(' ');
-    h += `<polygon points="${d}" fill="${cor}" fill-opacity="${s ? .22 : .12}" stroke="#e8eef7" stroke-width="${s ? 4 : 3}" stroke-linejoin="round"/>`;
+    if (!(c.abertas && c.abertas.length)) h += `<polygon points="${d}" fill="${cor}" fill-opacity="${s ? .22 : .12}" stroke="#e8eef7" stroke-width="${s ? 4 : 3}" stroke-linejoin="round"/>`;
+    else { // v42: parede removida (cômodo conjugado) vira divisa tracejada
+      h += `<polygon points="${d}" fill="${cor}" fill-opacity="${s ? .22 : .12}" stroke="none"/>`;
+      c.pts.forEach((p0, i) => { const A = tela(p0), B = tela(c.pts[(i + 1) % c.pts.length]), ab = c.abertas.includes(i);
+        h += `<line x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${B[0].toFixed(1)}" y2="${B[1].toFixed(1)}" stroke="${ab ? '#8fa3bf' : '#e8eef7'}" stroke-width="${ab ? 1.5 : s ? 4 : 3}" ${ab ? 'stroke-dasharray="7 6"' : 'stroke-linecap="round"'}/>`; });
+    }
   });
   { const c = sel.comodo && comodo(sel.comodo); if (c && sel.parede != null) { const A = tela(c.pts[sel.parede]), B = tela(c.pts[(sel.parede + 1) % c.pts.length]); h += `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="#ffc531" stroke-width="6" stroke-linecap="round"/>`; } }
   if (cam('portas')) proj.comodos.forEach(c => (c.portas || []).forEach(pt => h += svgPorta(c, pt, c.id === sel.comodo && sel.parede === pt.parede)));
@@ -474,6 +493,7 @@ function renderPainel() {
       <div class="linha"><label>Nova medida</label><input id="inParede" class="num" type="text" inputmode="decimal" value="${val}">
         <select id="selUn2"><option value="m" ${banco.unidade === 'm' ? 'selected' : ''}>m</option><option value="cm" ${banco.unidade === 'cm' ? 'selected' : ''}>cm</option></select>
         <button class="btn primario" id="btnAplicar">Aplicar</button><button class="btn" id="btnVoltarComodo">Cômodo</button></div>
+      <div class="linha"><button class="btn ${(c.abertas || []).includes(i) ? 'primario' : ''}" id="btnConjugar">${(c.abertas || []).includes(i) ? '🧱 Pôr a parede de volta' : '🔓 Tirar parede (conjugar cômodos)'}</button></div>
       ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}">${TIPOS_ABERT.find(x => x[0] === (pt.tipo || 'giro'))[1]} ${fmt(pt.largura)} m · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
         ${!pt.tipo || pt.tipo === 'giro' ? `<button class="btn pGirar">↻ Girar</button><button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button><button class="btn pInv">⇆ Lado</button>` : pt.tipo === 'dupla' ? `<button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button>` : ''}<button class="btn perigo pExc">✕</button></div>` : '').join('')}
       <div class="linha"><select id="selTipoAb">${TIPOS_ABERT.map(([k, n]) => `<option value="${k}" ${k === (banco.ultAb || 'giro') ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="selLargPorta">${[0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0].map(v => `<option value="${v}" ${v === (banco.ultLarg || 0.8) ? 'selected' : ''}>${fmt(v)} m</option>`).join('')}</select>
@@ -508,6 +528,7 @@ function renderPainel() {
     p.querySelector('#btnAplicar').onclick = aplicar;
     p.querySelector('#inParede').onkeydown = e => { if (e.key === 'Enter') aplicar(); };
     p.querySelector('#btnVoltarComodo').onclick = () => { sel.parede = null; render(); };
+    p.querySelector('#btnConjugar').onclick = () => alternarParede(c, i);
     return;
   }
   p.innerHTML = `<div class="linha"><input id="inNome" type="text" value="${esc(c.nome)}" maxlength="40"><select id="selTipo">${opcoesTipo(c.tipo)}</select></div>
@@ -1455,7 +1476,7 @@ const TUTO = [
   ['⚡', 'Bem-vindo ao EletroMaster', 'Você desenha a planta da casa e o app calcula luz, tomadas, circuitos, fios e disjuntores pela NBR 5410, explicando o porquê de cada valor.'],
   ['📁', '1. Crie um projeto', 'Na tela inicial, toque em <b>+ Novo projeto</b> e dê um nome. Tudo fica salvo sozinho no aparelho e, se entrou com Google, na nuvem.'],
   ['✎', '2. Desenhe os cômodos', 'Use <b>▭ Retângulo</b> pra um cômodo pronto, ou <b>✎ Desenhar</b> e arraste o dedo parede por parede. Feche no ponto verde. Dá pra digitar a medida de cada parede.'],
-  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta, porta dupla, de correr, janela, vão livre ou arco. Arraste os cantos pra mexer.'],
+  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta, porta dupla, de correr, janela, vão livre ou arco. Pra cozinha americana, toque na parede entre os cômodos e em <b>🔓 Tirar parede</b>. Arraste os cantos pra mexer.'],
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas. Em <b>🛣️ Rua e muro</b> você desenha a rua e o medidor fica no muro.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
   ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
@@ -1474,7 +1495,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=41').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=42').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
