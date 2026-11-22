@@ -15,10 +15,20 @@
     const a = el('contaArea'); if (!a) return;
     if (!auth) { a.innerHTML = ''; return; }
     if (usuario) {
-      const nome = (usuario.displayName || usuario.email || 'Conta').split(' ')[0];
-      a.innerHTML = `<span class="conta-nome" title="${status}">☁️ ${nome.replace(/[<>&"]/g, '')}</span><button class="btn peq" id="btnSair">Sair</button>`;
-      el('btnSair').onclick = () => confirmar('Sair da conta? Os projetos continuam neste aparelho.', () => auth.signOut(), 'Sair');
-    } else { a.innerHTML = '<button class="btn primario peq" id="btnEntrar">Entrar</button>'; el('btnEntrar').onclick = entrar; }
+      const limpa = s => String(s || '').replace(/[<>&"]/g, '');
+      const nomeT = limpa(usuario.displayName || usuario.email || 'Conta'), nome = nomeT.split(' ')[0], ini = (nome[0] || '?').toUpperCase();
+      const foto = usuario.photoURL && /^https:\/\//.test(usuario.photoURL) ? limpa(usuario.photoURL) : '';
+      const av = (t) => foto ? `<img class="avatar${t}" src="${foto}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;avatar${t} avatar-ini&quot;>${ini}</span>'">` : `<span class="avatar${t} avatar-ini">${ini}</span>`;
+      a.innerHTML = `<button class="conta-btn" id="btnConta" title="${limpa(status)}" aria-label="Minha conta">${av('')}</button>`;
+      el('btnConta').onclick = () => {
+        abrirModal(`<div style="text-align:center">${av(' avatar-g')}<h2 style="margin:10px 0 2px">${nomeT}</h2><div style="font-size:14px;opacity:.7">${limpa(usuario.email)}</div>
+          <div style="font-size:13px;margin:12px 0;opacity:.85">☁️ Projetos salvos na sua conta Google e neste aparelho.</div></div>
+          <div style="display:flex;gap:8px"><button class="btn" id="cFechar" style="flex:1">Fechar</button><button class="btn perigo" id="btnSair" style="flex:1">Sair da conta</button></div>`);
+        el('cFechar').onclick = fecharModal;
+        el('btnSair').onclick = () => confirmar('Sair da conta? Os projetos continuam neste aparelho.', () => auth.signOut(), 'Sair');
+      };
+      const s = el('saudacao'); if (s) { s.hidden = false; s.innerHTML = `${av(' avatar-m')}<div><div style="font-weight:700">Olá, ${nome}!</div><div style="font-size:13px;opacity:.7">Seus projetos estão salvos na nuvem.</div></div>`; }
+    } else { a.innerHTML = '<button class="btn primario peq" id="btnEntrar">Entrar</button>'; el('btnEntrar').onclick = entrar; const s = el('saudacao'); if (s) s.hidden = true; }
     const n = el('avisoSalvo'); if (n) n.textContent = usuario ? 'Projetos salvos na sua conta Google e neste aparelho.' : 'Sem login: os projetos ficam salvos só neste aparelho.';
   }
   function entrar() {

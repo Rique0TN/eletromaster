@@ -90,3 +90,12 @@ textarea#mNotas{width:100%;box-sizing:border-box;background:#0b1424;color:inheri
 .puxador{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;background:none;border:0;color:var(--suave);font:inherit;font-size:12px;padding:0 0 8px;margin-top:-4px;cursor:pointer}
 .puxador span{width:44px;height:5px;border-radius:3px;background:var(--linha)}
 .btn-painel{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);border-radius:22px;padding:10px 18px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:5}
+
+/* v30: foto de perfil */
+.conta-btn{background:none;border:0;padding:0;cursor:pointer;display:flex}
+.avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--linha);display:inline-flex;align-items:center;justify-content:center}
+.avatar-ini{background:#3b9cff;color:#fff;font-weight:700;font-size:16px}
+.avatar.avatar-g{width:84px;height:84px;font-size:34px}
+.avatar.avatar-m{width:48px;height:48px;font-size:20px;flex:none}
+.saudacao{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:12px;margin:10px 0}
+.saudacao[hidden]{display:none}

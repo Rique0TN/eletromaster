@@ -1124,7 +1124,7 @@ function livroNormas() {
   abrirModal(h); $('#lnOk').onclick = fecharModal;
 }
 $('#btnNormas').onclick = livroNormas;
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=29').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=30').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
