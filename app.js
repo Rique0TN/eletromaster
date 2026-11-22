@@ -222,7 +222,7 @@ const tela = w => [w[0] * vista.esc + vista.ox, w[1] * vista.esc + vista.oy];
 const mundo = s => [(s[0] - vista.ox) / vista.esc, (s[1] - vista.oy) / vista.esc];
 function enquadrar() {
   const r = svg.getBoundingClientRect();
-  const pts = proj.comodos.flatMap(c => c.pts).concat(rascunho);
+  const pts = proj.comodos.flatMap(c => c.pts).concat(rascunho); { const g = proj && ruaGeo(); if (g) { const o = k => [g.m[0] + g.dir[0] * k, g.m[1] + g.dir[1] * k]; pts.push(g.A, g.B, o(7.5)); } }
   if (!pts.length) { vista.esc = Math.min(r.width, r.height) / 8; vista.ox = r.width / 2; vista.oy = r.height / 2; return; }
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
   const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
@@ -333,6 +333,7 @@ function render() {
     const sy = tela([0, y])[1], forte = Math.abs(y - Math.round(y)) < 1e-6 && passo <= 1;
     h += `<line x1="0" y1="${sy}" x2="${W}" y2="${sy}" stroke="${forte ? '#1f3150' : '#16243b'}" stroke-width="1"/>`;
   }
+  h += svgRua();
   // cômodos
   proj.comodos.forEach(c => {
     const cor = CORES[c.tipo] || '#b0bccd', s = c.id === sel.comodo;
@@ -1073,7 +1074,7 @@ function painelPontos(p) {
   const ach = selPonto && achaPonto(selPonto), c = ach ? ach.c : sel.comodo && comodo(sel.comodo);
   let h = `<div class="linha">${FERR.map(([k, n]) => `<button class="btn ${ferramenta === k ? 'primario' : ''}" data-ferr="${k}">${n}</button>`).join('')}<button class="btn ${dupla ? 'primario' : ''}" id="btnDupla">${dupla ? '☑' : '☐'} Dupla</button><button class="btn" id="btnLegenda">Legenda</button></div>`;
   if (!proj.comodos.some(o => (o.pontos || []).some(x => x.k === 'qdc'))) h += `<div class="linha medidas">⚠️ Coloque o quadro (▣ Quadro) pra calcular a distância e a queda de tensão.</div>`;
-  if (proj.comodos.length) { const al = alimentador(); h += `<div class="linha"><button class="btn" id="btnSugQdc">🎯 Sugerir lugar do quadro</button>${al ? `<span class="medidas"> Medidor → quadro: <b>${fmt(al.L, 1)} m</b> · fio <b>${fmt(al.sec, 1).replace(',0', '')} mm²</b> · queda ${fmt(al.dv, 2)}%</span>` : '<span class="medidas"> Coloque o ⊠ Medidor e o ▣ Quadro pra calcular o fio entre eles.</span>'}</div>`; }
+  if (proj.comodos.length) { const al = alimentador(); h += `<div class="linha"><button class="btn" id="btnSugQdc">🎯 Sugerir lugar do quadro</button><button class="btn ${proj.rua && proj.rua.on ? 'primario' : ''}" id="btnRua">🛣️ Rua e muro</button>${al ? `<span class="medidas"> Medidor → quadro: <b>${fmt(al.L, 1)} m</b> · fio <b>${fmt(al.sec, 1).replace(',0', '')} mm²</b> · queda ${fmt(al.dv, 2)}%</span>` : '<span class="medidas"> Coloque o ⊠ Medidor e o ▣ Quadro pra calcular o fio entre eles.</span>'}</div>`; }
   if (c) { const t = tug(c), ni = (c.pontos || []).filter(q => q.k === 'int' || q.k === 'par').length; h += `<div class="linha medidas">${esc(c.nome)}: tomadas <b>${t.col}</b> (mín. ${t.min} · recom. até ${t.max})${t.col < t.min ? ' ⚠️ faltam ' + (t.min - t.col) : t.col > t.max ? ' · acima do recomendado' : ' ✔'} · interruptores <b>${ni}</b> (luz "${letraLuz(c)}")</div>`; }
   if (ach) {
     const q = ach.q;
@@ -1086,7 +1087,7 @@ function painelPontos(p) {
   p.innerHTML = h;
   p.querySelectorAll('[data-ferr]').forEach(b => b.onclick = () => { ferramenta = b.dataset.ferr; selPonto = null; render(); });
   p.querySelector('#btnLegenda').onclick = legendaPontos;
-  const sq = p.querySelector('#btnSugQdc'); if (sq) sq.onclick = sugerirQdc;
+  const sq = p.querySelector('#btnSugQdc'); if (sq) sq.onclick = sugerirQdc; const br = p.querySelector('#btnRua'); if (br) br.onclick = abrirRua;
   p.querySelector('#btnDupla').onclick = () => { dupla = !dupla; if (ferramenta === 'int' || ferramenta === 'par') ferramenta = 'bx'; render(); };
   if (ach) {
     const q = ach.q, a = p.querySelector('#pAlt'), ti = p.querySelector('#pTipoInt');
@@ -1112,6 +1113,47 @@ function novoAparelho(q) {
   $('#mCanc').onclick = fecharModal;
   $('#mOk').onclick = () => { const e = eq(), W = Math.round(+String(w.value).replace(',', '.')); if (!(W > 0)) return aviso('Digite a potência em W'); checkpoint(); (q.ap = q.ap || []).push({ id: uid(), eq: e[0], nome: nm.value.trim() || e[1], w: W, fp: e[3] }); fecharModal(); gravar(); render(); };
 }
+// v37: rua e muro — medidor no limite do terreno com a via pública
+const LADOS_RUA = [['s', '⬇ Embaixo'], ['n', '⬆ Em cima'], ['o', '⬅ Esquerda'], ['l', '➡ Direita']];
+function ruaGeo() {
+  const R = proj.rua; if (!R || !R.on || !proj.comodos.length) return null;
+  const ps = proj.comodos.flatMap(c => c.pts), xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
+  const mnx = Math.min(...xs) - 1, mxx = Math.max(...xs) + 1, mny = Math.min(...ys) - 1, mxy = Math.max(...ys) + 1, rc = Math.max(0, +R.recuo || 0), t = R.pos ?? .5;
+  let A, B, dir; // dir = sentido da rua (pra fora do lote)
+  if (R.lado === 'n') { const y = mny + 1 - rc; A = [mnx, y]; B = [mxx, y]; dir = [0, -1]; }
+  else if (R.lado === 'o') { const x = mnx + 1 - rc; A = [x, mny]; B = [x, mxy]; dir = [-1, 0]; }
+  else if (R.lado === 'l') { const x = mxx - 1 + rc; A = [x, mny]; B = [x, mxy]; dir = [1, 0]; }
+  else { const y = mxy - 1 + rc; A = [mnx, y]; B = [mxx, y]; dir = [0, 1]; }
+  return { A, B, dir, m: [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t] };
+}
+function svgRua() {
+  const g = ruaGeo(); if (!g) return '';
+  const off = (p, k) => tela([p[0] + g.dir[0] * k, p[1] + g.dir[1] * k]), A = tela(g.A), B = tela(g.B);
+  const c1 = off(g.A, 1.5), c2 = off(g.B, 1.5), c3 = off(g.B, 7.5), c4 = off(g.A, 7.5), mid = off([(g.A[0] + g.B[0]) / 2, (g.A[1] + g.B[1]) / 2], 4.5);
+  const pol = [c1, c2, c3, c4].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
+  let h = `<polygon points="${pol}" fill="#2a3342" opacity=".8"/><text x="${mid[0].toFixed(1)}" y="${(mid[1] + 5).toFixed(1)}" font-size="14" font-weight="700" fill="#8fa3bf" text-anchor="middle" letter-spacing="4">RUA</text>`;
+  h += `<line x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${B[0].toFixed(1)}" y2="${B[1].toFixed(1)}" stroke="#b0bccd" stroke-width="3" stroke-dasharray="10 7"/>`;
+  const mt = off(g.A, -0.4); h += `<text x="${mt[0].toFixed(1)}" y="${mt[1].toFixed(1)}" font-size="11" fill="#8fa3bf">muro</text>`;
+  if (cam('pontos') || modo === 'pontos') { const M = tela(g.m); h += `<g transform="translate(${M[0].toFixed(1)},${M[1].toFixed(1)})"><rect x="-10" y="-10" width="20" height="20" fill="#0d1626" stroke="#7ee0ff" stroke-width="2"/><path d="M-10,-10L10,10M10,-10L-10,10" stroke="#7ee0ff" stroke-width="1.4"/></g>`; }
+  return h;
+}
+function abrirRua() {
+  if (!proj.comodos.length) return aviso('Desenhe os cômodos primeiro.');
+  const R = proj.rua = proj.rua || { on: false, lado: 's', recuo: 3, pos: .5 };
+  abrirModal(`<h2>🛣️ Rua e muro</h2>
+    <label style="display:flex;justify-content:space-between;align-items:center;padding:8px 0"><span>Mostrar rua e muro, com o medidor no muro</span><input type="checkbox" id="rOn" ${R.on ? 'checked' : ''}></label>
+    <div class="campo"><label>De que lado fica a rua?</label><div class="linha">${LADOS_RUA.map(([k, n]) => `<button class="btn ${R.lado === k ? 'primario' : ''}" data-lado="${k}">${n}</button>`).join('')}</div></div>
+    <div class="campo"><label>Distância da casa até o muro (m)</label><input id="rRec" type="text" inputmode="decimal" value="${fmt(+R.recuo || 0, 1)}" style="max-width:110px"></div>
+    <div class="campo"><label>Posição do medidor no muro</label><input id="rPos" type="range" min="0" max="100" value="${Math.round((R.pos ?? .5) * 100)}" style="width:100%"></div>
+    <div class="medidas" style="font-size:13px;margin:8px 0">📘 A Coelba pede o padrão de entrada (medidor) no limite do terreno com a rua, com acesso livre pra leitura. 🧮 Com a rua ligada, o fio do alimentador é medido do medidor no muro até o ▣ Quadro, e o ⊠ Medidor colocado na parede deixa de valer.</div>
+    <div class="botoes"><button class="btn primario" id="mCanc">Pronto</button></div>`);
+  const upd = () => { gravar(); render(); };
+  $('#rOn').onchange = e => { checkpoint(); R.on = e.target.checked; if (R.on) enquadrar(); upd(); };
+  document.querySelectorAll('[data-lado]').forEach(b => b.onclick = () => { checkpoint(); R.lado = b.dataset.lado; R.on = true; $('#rOn').checked = true; document.querySelectorAll('[data-lado]').forEach(x => x.classList.toggle('primario', x === b)); enquadrar(); upd(); });
+  $('#rRec').onchange = e => { const v = +String(e.target.value).replace(',', '.'); if (!(v >= 0 && v <= 100)) return aviso('Digite de 0 a 100 m'); checkpoint(); R.recuo = v; enquadrar(); upd(); };
+  $('#rPos').oninput = e => { R.pos = e.target.value / 100; upd(); };
+  $('#mCanc').onclick = () => { fecharModal(); if (modo === 'pontos') render(); };
+}
 // v33: centro de cargas, sugestão do QDC e alimentador medidor → QDC
 function centroCargas() {
   let s = 0, x = 0, y = 0;
@@ -1132,6 +1174,7 @@ const QUEDA_ALIM = 1; // % no alimentador (somado aos 4% dos circuitos, fica at�
 function alimentador() {
   let M = null, Q = null;
   proj.comodos.forEach(c => (c.pontos || []).forEach(q => { const g = (q.k === 'med' || q.k === 'qdc') && geoPonto(c, q); if (g) { if (q.k === 'med') M = g.m; else Q = g.m; } }));
+  { const rg = ruaGeo(); if (rg) M = rg.m; }
   if (!M || !Q) return null;
   const g = geral(), L = Math.abs(M[0] - Q[0]) + Math.abs(M[1] - Q[1]) + 2; // + 2 m de subidas/descidas nas caixas
   let k = CAP.findIndex(([s]) => s === g.sec); if (k < 0) k = 0; const k0 = k;
@@ -1316,6 +1359,7 @@ function livroNormas() {
     it(ints || tomCol, 'Cores dos condutores', 'Neutro azul-claro, proteção (terra) verde-amarelo ou verde. Fase e retorno em outras cores.', 'Legenda dos pontos'));
   h += sec('Neoenergia Coelba · DIS-NOR-030', 'Norma da distribuidora da Bahia para fornecimento em baixa tensão.',
     it(tem, 'Fator de demanda (luz e tomadas)', 'Tabela 6 por faixa de potência instalada, para achar a demanda da casa e o disjuntor geral.', '📊 Demanda e 📋 Quadro') +
+    it(!!ruaGeo(), 'Medidor no limite do terreno', 'O padrão de entrada fica no muro, virado pra rua, com acesso livre pra leitura.', ruaGeo() ? '🔌 Pontos → 🛣️ Rua e muro' : 'ligue 🛣️ Rua e muro no modo 🔌 Pontos') +
     it(false, 'Padrão de entrada e demanda por tipo de aparelho', 'Chuveiros, ar-condicionado, fornos etc. agrupados como a Coelba pede.', 'em breve (módulo 18)'));
   h += sec('Simbologia (NBR 5444)', 'Cancelada em 2014, mas ainda é o padrão usado no mercado.',
     it(tomCol || ints || qdc, 'Símbolos de tomadas, interruptores e quadro', 'Tomada baixa, média e alta; interruptor simples e paralelo; quadro de distribuição.', 'modo 🔌 Pontos · Legenda'));
@@ -1331,7 +1375,7 @@ const TUTO = [
   ['📁', '1. Crie um projeto', 'Na tela inicial, toque em <b>+ Novo projeto</b> e dê um nome. Tudo fica salvo sozinho no aparelho e, se entrou com Google, na nuvem.'],
   ['✎', '2. Desenhe os cômodos', 'Use <b>▭ Retângulo</b> pra um cômodo pronto, ou <b>✎ Desenhar</b> e arraste o dedo parede por parede. Feche no ponto verde. Dá pra digitar a medida de cada parede.'],
   ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta. Arraste os cantos pra mexer.'],
-  ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas.'],
+  ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas. Em <b>🛣️ Rua e muro</b> você desenha a rua e o medidor fica no muro.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
   ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
   ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas.'],
@@ -1349,7 +1393,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=36').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=37').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
