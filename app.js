@@ -374,6 +374,18 @@ function alternarParede(c, i) {
 }
 // ---------- portas ----------
 // v41: tipos de abertura (porta de giro, dupla, de correr, vão livre, arco, janela)
+// v44: medidas comerciais mais usadas (largura × altura, peitoril das janelas), padrão muda com o cômodo
+const MED_ABERT = {
+  giro: { lista: [0.6, 0.7, 0.8, 0.9], alt: 2.1, padrao: t => ['banheiro', 'lavabo'].includes(t) ? 0.6 : ['area_servico', 'despensa'].includes(t) ? 0.7 : t === 'sala' ? 0.8 : 0.7 },
+  dupla: { lista: [1.2, 1.4, 1.6], alt: 2.1, padrao: () => 1.2 },
+  correr: { lista: [0.8, 1.0, 1.2, 1.5, 2.0], alt: 2.1, padrao: t => ['varanda', 'sala'].includes(t) ? 2.0 : 0.8 },
+  vao: { lista: [0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0], alt: 2.1, padrao: () => 0.8 },
+  arco: { lista: [0.8, 0.9, 1.0, 1.2, 1.5, 2.0], alt: 2.1, padrao: () => 0.9 },
+  janela: { lista: [0.6, 0.8, 1.0, 1.2, 1.5, 2.0], alt: t => ['banheiro', 'lavabo'].includes(t) ? 0.6 : 1.0, peit: t => ['banheiro', 'lavabo'].includes(t) ? 1.5 : ['cozinha', 'area_servico'].includes(t) ? 1.2 : 1.1,
+    padrao: t => ['banheiro', 'lavabo'].includes(t) ? 0.6 : ['cozinha', 'area_servico'].includes(t) ? 1.0 : t === 'sala' ? 1.5 : 1.2 }
+};
+const altAb = (tp, t) => { const m = MED_ABERT[tp || 'giro']; return typeof m.alt === 'function' ? m.alt(t) : m.alt; };
+const descAb = (pt, t) => { const tp = pt.tipo || 'giro'; return tp === 'janela' ? `${fmt(pt.largura)} × ${fmt(pt.altura || altAb(tp, t))} m, peitoril ${fmt(pt.peitoril || MED_ABERT.janela.peit(t))} m` : `${fmt(pt.largura)} × ${fmt(pt.altura || altAb(tp, t))} m`; };
 const TIPOS_ABERT = [['giro', '🚪 Porta'], ['dupla', '🚪🚪 Porta dupla'], ['correr', '↔️ Porta de correr'], ['vao', '▯ Vão livre'], ['arco', '⌒ Arco'], ['janela', '🪟 Janela']];
 // porta = { id, parede, pos (m do canto inicial até o centro), largura, fora (abre pra fora), inverter (dobradiça do outro lado) }
 function geoPorta(c, pt) {
@@ -562,15 +574,18 @@ function renderPainel() {
         <select id="selUn2"><option value="m" ${banco.unidade === 'm' ? 'selected' : ''}>m</option><option value="cm" ${banco.unidade === 'cm' ? 'selected' : ''}>cm</option></select>
         <button class="btn primario" id="btnAplicar">Aplicar</button><button class="btn" id="btnVoltarComodo">Cômodo</button></div>
       <div class="linha"><button class="btn ${(c.abertas || []).includes(i) ? 'primario' : ''}" id="btnConjugar">${(c.abertas || []).includes(i) ? '🧱 Pôr a parede de volta' : '🔓 Tirar parede (conjugar cômodos)'}</button></div>
-      ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}">${TIPOS_ABERT.find(x => x[0] === (pt.tipo || 'giro'))[1]} ${fmt(pt.largura)} m · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
+      ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}">${TIPOS_ABERT.find(x => x[0] === (pt.tipo || 'giro'))[1]} ${descAb(pt, c.tipo)} · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
         ${!pt.tipo || pt.tipo === 'giro' ? `<button class="btn pGirar">↻ Girar</button><button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button><button class="btn pInv">⇆ Lado</button>` : pt.tipo === 'dupla' ? `<button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button>` : ''}<button class="btn perigo pExc">✕</button></div>` : '').join('')}
-      <div class="linha"><select id="selTipoAb">${TIPOS_ABERT.map(([k, n]) => `<option value="${k}" ${k === (banco.ultAb || 'giro') ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="selLargPorta">${[0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0].map(v => `<option value="${v}" ${v === (banco.ultLarg || 0.8) ? 'selected' : ''}>${fmt(v)} m</option>`).join('')}</select>
+      <div class="linha"><select id="selTipoAb">${TIPOS_ABERT.map(([k, n]) => `<option value="${k}" ${k === (banco.ultAb || 'giro') ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="selLargPorta"></select>
         <button class="btn" id="btnAddPorta">+ Adicionar</button></div>`;
+    const opLarg = () => { const tp = p.querySelector('#selTipoAb').value, m = MED_ABERT[tp], d = m.padrao(c.tipo);
+      p.querySelector('#selLargPorta').innerHTML = m.lista.map(v => `<option value="${v}" ${v === d ? 'selected' : ''}>${fmt(v)} m${v === d ? ' (comum)' : ''}</option>`).join(''); };
+    opLarg(); p.querySelector('#selTipoAb').onchange = opLarg;
     p.querySelector('#btnAddPorta').onclick = () => {
       const w = parseFloat(p.querySelector('#selLargPorta').value);
       if (w > L + 1e-6) { aviso('A porta é maior que a parede.'); return; }
-      const tp = p.querySelector('#selTipoAb').value; banco.ultAb = tp; banco.ultLarg = w; salvar();
-      checkpoint(); c.portas = c.portas || []; c.portas.push({ id: uid(), tipo: tp, parede: i, pos: L / 2, largura: w, fora: false, inverter: false }); gravar(); render();
+      const tp = p.querySelector('#selTipoAb').value; banco.ultAb = tp; salvar();
+      checkpoint(); c.portas = c.portas || []; c.portas.push({ id: uid(), tipo: tp, parede: i, pos: L / 2, largura: w, altura: altAb(tp, c.tipo), ...(tp === 'janela' ? { peitoril: MED_ABERT.janela.peit(c.tipo) } : {}), fora: false, inverter: false }); gravar(); render();
     };
     p.querySelectorAll('.porta-linha').forEach(row => {
       const pt = c.portas[+row.dataset.k];
@@ -910,6 +925,10 @@ $('#btnRetangulo').onclick = () => {
     <div class="campo"><label>Nome (opcional)</label><input id="mNome" type="text" maxlength="40"></div>
     <div class="botoes"><button class="btn" id="mCanc">Cancelar</button><button class="btn primario" id="mOk">Criar</button></div>`);
   $('#mL').focus();
+  // v44: medidas médias de casa popular por tipo (preenche se você ainda não mexeu)
+  const MED_COM = { sala: [3, 4], quarto: [3, 3], cozinha: [2.5, 3], copa: [2.5, 3], banheiro: [1.5, 2.2], lavabo: [1, 1.5], area_servico: [1.5, 2], varanda: [1.5, 3], corredor: [0.9, 3], garagem: [3, 5], escritorio: [2.5, 3], despensa: [1, 1.5] };
+  let mexeu = false; ['#mL', '#mC'].forEach(s => $(s).oninput = () => mexeu = true);
+  $('#mTipo').onchange = () => { const m = MED_COM[$('#mTipo').value]; if (!m || mexeu) return; const f = v => u === 'cm' ? String(Math.round(v * 100)) : v.toFixed(2).replace('.', ','); $('#mL').value = f(m[0]); $('#mC').value = f(m[1]); };
   $('#mCanc').onclick = fecharModal;
   $('#mOk').onclick = () => {
     const L = lerMedida($('#mL').value, u), C = lerMedida($('#mC').value, u), tipo = $('#mTipo').value;
@@ -1565,7 +1584,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=43').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=44').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
