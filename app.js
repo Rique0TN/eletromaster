@@ -574,12 +574,13 @@ function renderPainel() {
         <select id="selUn2"><option value="m" ${banco.unidade === 'm' ? 'selected' : ''}>m</option><option value="cm" ${banco.unidade === 'cm' ? 'selected' : ''}>cm</option></select>
         <button class="btn primario" id="btnAplicar">Aplicar</button><button class="btn" id="btnVoltarComodo">Cômodo</button></div>
       <div class="linha"><button class="btn ${(c.abertas || []).includes(i) ? 'primario' : ''}" id="btnConjugar">${(c.abertas || []).includes(i) ? '🧱 Pôr a parede de volta' : '🔓 Tirar parede (conjugar cômodos)'}</button></div>
-      ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}">${TIPOS_ABERT.find(x => x[0] === (pt.tipo || 'giro'))[1]} ${descAb(pt, c.tipo)} · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
+      ${(c.portas || []).map((pt, k) => pt.parede === i ? `<div class="linha porta-linha" data-k="${k}"><b>${TIPOS_ABERT.find(x => x[0] === (pt.tipo || 'giro'))[1]}</b> Largura <input class="num pLarg" type="text" inputmode="decimal" value="${fmt(pt.largura)}"> m · Altura <input class="num pAlt" type="text" inputmode="decimal" value="${fmt(pt.altura || altAb(pt.tipo, c.tipo))}"> m${(pt.tipo === 'janela') ? ` · Peitoril <input class="num pPeit" type="text" inputmode="decimal" value="${fmt(pt.peitoril || MED_ABERT.janela.peit(c.tipo))}"> m` : ''} · a <input class="num pPos" type="text" inputmode="decimal" value="${fmt(Math.max(0, pt.pos - pt.largura / 2))}"> m do canto
         ${!pt.tipo || pt.tipo === 'giro' ? `<button class="btn pGirar">↻ Girar</button><button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button><button class="btn pInv">⇆ Lado</button>` : pt.tipo === 'dupla' ? `<button class="btn pFora">${pt.fora ? 'Pra fora' : 'Pra dentro'}</button>` : ''}<button class="btn perigo pExc">✕</button></div>` : '').join('')}
-      <div class="linha"><select id="selTipoAb">${TIPOS_ABERT.map(([k, n]) => `<option value="${k}" ${k === (banco.ultAb || 'giro') ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="selLargPorta"></select>
+      <div class="linha"><select id="selTipoAb">${TIPOS_ABERT.map(([k, n]) => `<option value="${k}" ${k === (banco.ultAb || 'giro') ? 'selected' : ''}>${n}</option>`).join('')}</select><label style="margin:0 4px">Largura</label><select id="selLargPorta"></select><span id="altAbTxt" style="font-size:13px;opacity:.8;margin:0 6px"></span>
         <button class="btn" id="btnAddPorta">+ Adicionar</button></div>`;
     const opLarg = () => { const tp = p.querySelector('#selTipoAb').value, m = MED_ABERT[tp], d = m.padrao(c.tipo);
-      p.querySelector('#selLargPorta').innerHTML = m.lista.map(v => `<option value="${v}" ${v === d ? 'selected' : ''}>${fmt(v)} m${v === d ? ' (comum)' : ''}</option>`).join(''); };
+      p.querySelector('#selLargPorta').innerHTML = m.lista.map(v => `<option value="${v}" ${v === d ? 'selected' : ''}>${fmt(v)} m${v === d ? ' (comum)' : ''}</option>`).join('');
+      p.querySelector('#altAbTxt').textContent = `Altura ${fmt(altAb(tp, c.tipo))} m` + (tp === 'janela' ? ` · Peitoril ${fmt(m.peit(c.tipo))} m` : ''); };
     opLarg(); p.querySelector('#selTipoAb').onchange = opLarg;
     p.querySelector('#btnAddPorta').onclick = () => {
       const w = parseFloat(p.querySelector('#selLargPorta').value);
@@ -596,6 +597,9 @@ function renderPainel() {
       if (row.querySelector('.pFora')) row.querySelector('.pFora').onclick = () => { checkpoint(); pt.fora = !pt.fora; gravar(); render(); };
       if (row.querySelector('.pInv')) row.querySelector('.pInv').onclick = () => { checkpoint(); pt.inverter = !pt.inverter; gravar(); render(); };
       row.querySelector('.pExc').onclick = () => { checkpoint(); c.portas.splice(+row.dataset.k, 1); gravar(); render(); };
+      const num = (sel, f) => { const q = row.querySelector(sel); if (q) q.onchange = e => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!isFinite(v) || v <= 0) { render(); return; } checkpoint(); f(v); gravar(); render(); }; };
+      num('.pLarg', v => { if (v > L) { aviso('Maior que a parede.'); return; } pt.largura = v; pt.pos = Math.max(v / 2, Math.min(L - v / 2, pt.pos)); });
+      num('.pAlt', v => pt.altura = v); num('.pPeit', v => pt.peitoril = v);
       row.querySelector('.pPos').onchange = e => {
         const v = parseFloat(String(e.target.value).replace(',', '.'));
         if (!isFinite(v) || v < 0) { render(); return; }
@@ -1584,7 +1588,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=45').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=46').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
