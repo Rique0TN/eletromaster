@@ -145,9 +145,71 @@ function abrirNotas(p, depois) {
 document.querySelectorAll('.abas [data-aba]').forEach(b => b.onclick = () => {
   document.querySelectorAll('.abas [data-aba]').forEach(x => x.classList.toggle('ativa', x === b));
   const meus = b.dataset.aba === 'meus';
-  $('#abaMeus').hidden = !meus; $('#abaComp').hidden = meus;
+  $('#abaMeus').hidden = !meus; $('#abaComp').hidden = meus; if (!meus) renderComp();
 });
 $('#btnNotasProj').onclick = () => proj && abrirNotas(proj);
+
+// ---------- v43: compartilhamento ----------
+const linkComp = sid => `https://rique0tn.github.io/eletromaster/?p=${sid}`;
+function abrirCompartilhado(p, sid, papel, dono) {
+  compAtual = { sid, papel, dono }; proj = p;
+  pilhaDesfazer = []; pilhaRefazer = []; rascunho = []; sel = { comodo: null, parede: null };
+  $('#nomeProjeto').textContent = (papel === 'ver' ? '👁 ' : '👥 ') + p.nome;
+  $('#telaEditor').classList.toggle('so-ver', papel === 'ver');
+  mostrarTela('telaEditor'); definirModo(papel === 'ver' ? 'ver' : 'selecionar');
+  requestAnimationFrame(() => { enquadrar(); render(); });
+  aviso(papel === 'ver' ? `Só visualização${dono ? ' · projeto de ' + dono : ''}. Dá pra abrir os cálculos em ☰ Cômodos.` : `Editando junto${dono ? ' com ' + dono : ''}. As mudanças vão pro projeto compartilhado.`);
+}
+function abrirLink() {
+  const sid = new URLSearchParams(location.search).get('p'); if (!sid) return;
+  EMNuvem.lerComp(sid).then(d => {
+    if (!d) { aviso('Esse link de projeto não existe mais.'); return; }
+    const u = EMNuvem.usuario(), email = u && (u.email || '').toLowerCase();
+    if (u && d.dono === u.uid) { const meu = banco.projetos.find(p => p.compId === sid); if (meu) { abrirProjeto(meu.id); return; } }
+    let p; try { p = JSON.parse(d.dados); } catch { return aviso('Não consegui abrir o projeto.'); }
+    abrirCompartilhado(p, sid, email && (d.editores || []).includes(email) ? 'editar' : 'ver', d.donoNome);
+  }).catch(() => aviso('Não consegui abrir o link agora. Confira a internet.'));
+}
+function renderComp() {
+  const el = $('#abaComp'); if (!el || !window.EMNuvem) return;
+  if (!EMNuvem.usuario()) { el.innerHTML = '<div class="vazio">Entre com Google pra ver os projetos que outras pessoas compartilharam com você pra editar. Quem só tem o link abre direto, sem login.</div>'; return; }
+  el.innerHTML = '<div class="vazio">Carregando…</div>';
+  EMNuvem.listarComp().then(l => {
+    if (!l.length) { el.innerHTML = '<div class="vazio">Nada por aqui ainda. Quando alguém colocar seu e-mail como colaborador num projeto, ele aparece aqui.</div>'; return; }
+    el.innerHTML = l.sort((x, y) => (y.atualizado || 0) - (x.atualizado || 0)).map(d => `<div class="cartao" data-sid="${d.sid}"><h3>${esc(d.nome || 'Projeto')}</h3><div class="info">de ${esc(d.donoNome || d.donoEmail || 'alguém')} · editado ${new Date(d.atualizado || 0).toLocaleDateString('pt-BR')}</div><div class="acoes"><button class="btn primario">✏️ Abrir e editar</button></div></div>`).join('');
+    el.querySelectorAll('[data-sid]').forEach(c => c.querySelector('button').onclick = () => { const d = l.find(x => x.sid === c.dataset.sid); try { abrirCompartilhado(JSON.parse(d.dados), d.sid, 'editar', d.donoNome); } catch { aviso('Não consegui abrir.'); } });
+  }).catch(() => { el.innerHTML = '<div class="vazio">Não consegui carregar agora. Confira a internet.</div>'; });
+}
+function abrirCompartilhar() {
+  if (!proj) return;
+  if (compAtual) { abrirModal(`<h2>🔗 Projeto compartilhado</h2><div style="margin:8px 0 14px;line-height:1.5">Esse projeto é ${compAtual.dono ? 'de <b>' + esc(compAtual.dono) + '</b>' : 'de outra pessoa'}. Você ${compAtual.papel === 'ver' ? 'só pode ver' : 'pode editar, e as mudanças vão pro projeto dele'}.</div><div class="botoes"><button class="btn" id="mCanc">Fechar</button>${compAtual.papel === 'ver' ? '' : '<button class="btn primario" id="mCopiar">📥 Salvar uma cópia minha</button>'}</div>`); $('#mCanc').onclick = fecharModal; if ($('#mCopiar')) $('#mCopiar').onclick = () => { const c = clone(proj); c.id = uid(); delete c.compId; c.nome = proj.nome + ' (cópia)'; c.atualizado = Date.now(); banco.projetos.push(c); salvar(); fecharModal(); aviso('Cópia salva em Meus projetos.'); }; return; }
+  if (!window.EMNuvem || !EMNuvem.usuario()) { abrirModal(`<h2>🔗 Compartilhar</h2><div style="margin:8px 0 14px;line-height:1.5">Pra compartilhar, entre com Google (no topo da lista de projetos). O projeto precisa estar na nuvem pra outra pessoa abrir.</div><div class="botoes"><button class="btn primario" id="mCanc">Ok</button></div>`); $('#mCanc').onclick = fecharModal; return; }
+  const sid = proj.compId;
+  if (!sid) {
+    abrirModal(`<h2>🔗 Compartilhar projeto</h2><div style="margin:8px 0 14px;line-height:1.5">Gera um link do projeto.<br>👁 <b>Visualizador</b>: quem tiver o link abre e vê tudo, sem login, sem poder mudar.<br>✏️ <b>Colaborador</b>: você coloca o e-mail Google da pessoa e ela edita junto, pela aba Compartilhados comigo.</div><div class="botoes"><button class="btn" id="mCanc">Cancelar</button><button class="btn primario" id="mGerar">Gerar link</button></div>`);
+    $('#mCanc').onclick = fecharModal;
+    $('#mGerar').onclick = () => { $('#mGerar').disabled = true; EMNuvem.criarComp(proj).then(s => { proj.compId = s; gravar(); abrirCompartilhar(); }).catch(e => { $('#mGerar').disabled = false; aviso('Não consegui gerar o link agora.'); console.warn(e); }); };
+    return;
+  }
+  EMNuvem.lerComp(sid).then(d => {
+    const eds = (d && d.editores) || [], url = linkComp(sid);
+    abrirModal(`<h2>🔗 Compartilhar projeto</h2>
+      <div class="campo"><label>👁 Link pra visualizar (sem login)</label><input type="text" readonly value="${url}" id="mUrl"></div>
+      <div class="linha" style="gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn primario" id="mCopLk">📋 Copiar link</button>${navigator.share ? '<button class="btn" id="mShare">📤 Enviar</button>' : ''}</div>
+      <div class="campo"><label>✏️ Colaboradores (podem editar)</label>${eds.map(e => `<div class="linha" style="justify-content:space-between;padding:4px 0">${esc(e)} <button class="btn perigo" data-rm="${esc(e)}">✕</button></div>`).join('') || '<div style="opacity:.7;font-size:13px">Ninguém ainda.</div>'}</div>
+      <div class="linha" style="gap:8px"><input type="email" id="mEmail" placeholder="email@gmail.com" style="flex:1"><button class="btn" id="mAddEd">+ Adicionar</button></div>
+      <div style="font-size:12px;opacity:.7;margin:8px 0">O colaborador entra com esse e-mail Google e o projeto aparece na aba Compartilhados comigo. Mande o link pra ele também.</div>
+      <div class="botoes"><button class="btn perigo" id="mParar">Parar de compartilhar</button><button class="btn primario" id="mCanc">Pronto</button></div>`);
+    $('#mCanc').onclick = fecharModal;
+    $('#mCopLk').onclick = () => { try { navigator.clipboard.writeText(url).then(() => aviso('Link copiado!')); } catch { $('#mUrl').select(); } };
+    if ($('#mShare')) $('#mShare').onclick = () => navigator.share({ title: proj.nome, text: `Projeto elétrico "${proj.nome}" no EletroMaster`, url }).catch(() => { });
+    const salvarEds = l => EMNuvem.editores(sid, l).then(abrirCompartilhar).catch(() => aviso('Não consegui salvar agora.'));
+    $('#mAddEd').onclick = () => { const e = $('#mEmail').value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return aviso('Digite um e-mail válido.'); if (eds.includes(e)) return aviso('Já está na lista.'); salvarEds([...eds, e]); };
+    document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => salvarEds(eds.filter(x => x !== b.dataset.rm)));
+    $('#mParar').onclick = () => { EMNuvem.pararComp(sid).then(() => { delete proj.compId; gravar(); fecharModal(); aviso('O link parou de funcionar.'); }).catch(() => aviso('Não consegui agora.')); };
+  }).catch(() => aviso('Não consegui abrir o compartilhamento agora.'));
+}
+$('#btnCompart').onclick = abrirCompartilhar;
 
 // ---------- modal ----------
 function abrirModal(html) { $('#modalConteudo').innerHTML = html; $('#modal').classList.remove('escondido'); }
@@ -173,6 +235,7 @@ function confirmar(msg, ok, rotulo = 'Excluir') {
 const opcoesTipo = sel => TIPOS.map(([k, n]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${n}</option>`).join('');
 
 // ---------- estado do editor ----------
+let compAtual = null;          // v43: projeto aberto de outra pessoa { sid, papel: 'ver' | 'editar', dono }
 let proj = null;                 // projeto aberto
 let vista = { esc: 60, ox: 0, oy: 0 }; // px por metro e deslocamento
 let modo = 'selecionar';
@@ -182,6 +245,7 @@ let cursor = null;               // posição prevista (mouse)
 let pilhaDesfazer = [], pilhaRefazer = [];
 
 function abrirProjeto(id) {
+  compAtual = null; $('#telaEditor').classList.remove('so-ver');
   proj = banco.projetos.find(p => p.id === id);
   pilhaDesfazer = []; pilhaRefazer = []; rascunho = []; sel = { comodo: null, parede: null };
   $('#nomeProjeto').textContent = proj.nome;
@@ -189,10 +253,14 @@ function abrirProjeto(id) {
   definirModo(proj.comodos.length ? 'selecionar' : 'desenhar');
   requestAnimationFrame(() => { enquadrar(); render(); if (!banco.tutorialVisto && !document.getElementById('lobby')) tutorial(0); });
 }
-$('#btnVoltar').onclick = () => { const sair = () => { rascunho = []; proj = null; mostrarTela('telaProjetos'); renderLista(); }; rascunho.length ? confirmar('Descartar o cômodo que está sendo desenhado?', sair, 'Descartar') : sair(); };
+$('#btnVoltar').onclick = () => { const sair = () => { rascunho = []; proj = null; if (compAtual) { compAtual = null; $('#telaEditor').classList.remove('so-ver'); history.replaceState(null, '', location.pathname); } mostrarTela('telaProjetos'); renderLista(); }; rascunho.length ? confirmar('Descartar o cômodo que está sendo desenhado?', sair, 'Descartar') : sair(); };
 $('#nomeProjeto').onclick = () => pedirTexto('Renomear projeto', proj.nome, n => { proj.nome = n; gravar(); $('#nomeProjeto').textContent = n; });
 
-function gravar() { proj.atualizado = Date.now(); salvar(); }
+function gravar() {
+  proj.atualizado = Date.now();
+  if (compAtual) { if (compAtual.papel === 'editar' && window.EMNuvem) EMNuvem.salvarComp(proj, compAtual.sid); return; }
+  salvar(); if (proj.compId && window.EMNuvem) EMNuvem.salvarComp(proj, proj.compId);
+}
 function checkpoint() { pilhaDesfazer.push(clone(proj.comodos)); if (pilhaDesfazer.length > 80) pilhaDesfazer.shift(); pilhaRefazer = []; atualizarBotoes(); }
 function desfazer() {
   if (modo === 'desenhar' && rascunho.length) { rascunho.pop(); render(); return; }
@@ -872,6 +940,7 @@ $('#btnComodos').onclick = () => {
 
 // ---------- modos ----------
 function definirModo(m) {
+  if (compAtual && compAtual.papel === 'ver') m = 'ver';
   modo = m; if (m === 'desenhar' || m === 'ver') sel = { comodo: null, parede: null }; if (m === 'ver') selPonto = null;
   document.querySelectorAll('.barra .modo').forEach(b => b.classList.toggle('ativo', b.dataset.modo === m));
   $('#painel').dataset.tipo = '';
@@ -1476,7 +1545,8 @@ const TUTO = [
   ['⚡', 'Bem-vindo ao EletroMaster', 'Você desenha a planta da casa e o app calcula luz, tomadas, circuitos, fios e disjuntores pela NBR 5410, explicando o porquê de cada valor.'],
   ['📁', '1. Crie um projeto', 'Na tela inicial, toque em <b>+ Novo projeto</b> e dê um nome. Tudo fica salvo sozinho no aparelho e, se entrou com Google, na nuvem.'],
   ['✎', '2. Desenhe os cômodos', 'Use <b>▭ Retângulo</b> pra um cômodo pronto, ou <b>✎ Desenhar</b> e arraste o dedo parede por parede. Feche no ponto verde. Dá pra digitar a medida de cada parede.'],
-  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta, porta dupla, de correr, janela, vão livre ou arco. Pra cozinha americana, toque na parede entre os cômodos e em <b>🔓 Tirar parede</b>. Arraste os cantos pra mexer.'],
+  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta, porta dupla, de correr, janela, vão livre ou arco. Pra cozinha americana, toque na parede entre os cômodos e em <b>🔓 Tirar parede</b>.'],
+  ['🔗', 'Compartilhe', 'O <b>🔗</b> no topo gera um link: quem abrir só vê, sem login. Pra alguém editar junto, coloque o e-mail Google da pessoa; o projeto aparece na aba <b>Compartilhados comigo</b> dela. Arraste os cantos pra mexer.'],
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas. Em <b>🛣️ Rua e muro</b> você desenha a rua e o medidor fica no muro.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
   ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
@@ -1495,7 +1565,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=42').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=43').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {

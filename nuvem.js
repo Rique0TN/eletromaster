@@ -10,6 +10,10 @@
   const el = id => document.getElementById(id);
   const carregarJS = src => new Promise((ok, erro) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => erro(new Error(src)); document.head.appendChild(s); });
   const col = () => db.collection('usuarios').doc(usuario.uid).collection('projetos');
+  const comp = () => db.collection('compart'); // v43: compartilhamento (link = só ver; e-mail na lista = pode editar)
+  const novoSid = () => { const c = 'abcdefghijkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint8Array(20)); r.forEach(v => s += c[v % c.length]); return s; };
+  let timerComp = null;
+  function dadosComp(p) { const q = JSON.parse(JSON.stringify(p)); return { nome: p.nome, dados: JSON.stringify(q), atualizado: p.atualizado || Date.now() }; }
 
   function renderConta() {
     const a = el('contaArea'); if (!a) return;
@@ -56,7 +60,7 @@
   function lobbyEscolhido() { try { return localStorage.getItem(K_LOBBY) === 'convidado'; } catch { return false; } }
   function fecharLobby() { const l = el('lobby'); if (l) l.remove(); }
   function mostrarLobby() {
-    if (el('lobby') || lobbyEscolhido()) return;
+    if (el('lobby') || lobbyEscolhido() || /[?&]p=/.test(location.search)) return;
     const l = document.createElement('div'); l.id = 'lobby'; l.className = 'lobby';
     l.innerHTML = `<div class="lobby-caixa"><div class="lobby-raio">⚡</div><h2>EletroMaster</h2>
       <p class="lobby-sub">Planta baixa e projeto elétrico pela NBR 5410, com o porquê de cada valor.</p>
@@ -96,6 +100,7 @@
         else if ((p.atualizado || 0) > (banco.projetos[i].atualizado || 0) && !(typeof proj !== 'undefined' && proj && proj.id === d.id)) { banco.projetos[i] = p; trouxe++; }
         if ((banco.projetos.find(x => x.id === d.id) || {}).atualizado === p.atualizado) enviados[d.id] = p.atualizado;
       });
+      banco.projetos.filter(p => p.compId).forEach(p => comp().doc(p.compId).get().then(d => { if (!d.exists) return; const x = d.data(); if ((x.atualizado || 0) > (p.atualizado || 0) && !(typeof proj !== 'undefined' && proj && proj.id === p.id)) { try { const np = JSON.parse(x.dados); np.compId = p.compId; Object.assign(p, np); salvarLocal(); if (el('telaProjetos').classList.contains('ativa')) renderLista(); } catch { } } }).catch(() => { }));
       salvarLocal(); pronto = true;
       if (trouxe) { aviso(`${trouxe} projeto(s) da sua conta carregado(s).`); if (el('telaProjetos').classList.contains('ativa')) renderLista(); }
       enviar();
@@ -103,6 +108,14 @@
   }
 
   window.EMNuvem = {
+    pronto: () => !!db,
+    usuario: () => usuario,
+    lerComp: sid => db ? comp().doc(sid).get().then(d => d.exists ? d.data() : null) : Promise.reject(new Error('offline')),
+    criarComp(p) { const sid = novoSid(); return comp().doc(sid).set({ dono: usuario.uid, donoNome: usuario.displayName || '', donoEmail: (usuario.email || '').toLowerCase(), editores: [], ...dadosComp(p) }).then(() => sid); },
+    salvarComp(p, sid) { if (!usuario || !db || !sid) return; clearTimeout(timerComp); timerComp = setTimeout(() => comp().doc(sid).update(dadosComp(p)).catch(e => { console.warn('comp', e && e.code); aviso('Não consegui salvar no projeto compartilhado agora.'); }), 1500); },
+    editores: (sid, lista) => comp().doc(sid).update({ editores: lista }),
+    pararComp: sid => comp().doc(sid).delete(),
+    listarComp: () => usuario && usuario.email ? comp().where('editores', 'array-contains', usuario.email.toLowerCase()).get().then(s => { const r = []; s.forEach(d => r.push({ sid: d.id, ...d.data() })); return r; }) : Promise.resolve([]),
     agendar() { if (!usuario || !pronto) return; clearTimeout(timer); timer = setTimeout(enviar, 1500); },
     apagado(id) { banco.apagados = [...new Set([...(banco.apagados || []), id])]; salvarLocal(); this.agendar(); },
     logado: () => !!usuario
@@ -112,6 +125,9 @@
   carregarJS(SDK + 'firebase-app-compat.js').then(() => carregarJS(SDK + 'firebase-auth-compat.js')).then(() => carregarJS(SDK + 'firebase-firestore-compat.js')).then(() => {
     firebase.initializeApp(CFG); auth = firebase.auth(); db = firebase.firestore();
     auth.getRedirectResult().catch(() => { });
-    auth.onAuthStateChanged(u => { usuario = u; status = ''; renderConta(); if (u) { fecharLobby(); sincronizarAoEntrar(); } else { pronto = false; mostrarLobby(); } });
+    let linkFeito = false;
+    auth.onAuthStateChanged(u => { usuario = u; status = ''; renderConta(); if (u) { fecharLobby(); sincronizarAoEntrar(); } else { pronto = false; mostrarLobby(); }
+      if (!linkFeito && typeof abrirLink === 'function') { linkFeito = true; abrirLink(); }
+      if (typeof renderComp === 'function') renderComp(); });
   }).catch(() => { renderConta(); });
 })();

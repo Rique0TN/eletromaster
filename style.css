@@ -114,3 +114,6 @@ textarea#mNotas{width:100%;box-sizing:border-box;background:#0b1424;color:inheri
 /* v39: sem zoom por toque duplo */
 html,body{touch-action:manipulation}
 .modal{z-index:120}
+
+/* v43: só visualização */
+#telaEditor.so-ver .barra [data-modo],#telaEditor.so-ver #btnRetangulo,#telaEditor.so-ver #btnDesfazer,#telaEditor.so-ver #btnRefazer,#telaEditor.so-ver #btnNotasProj{display:none}
