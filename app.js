@@ -982,7 +982,7 @@ $('#btnComodos').onclick = () => {
     <table><tr><th>Nome</th><th>Tipo</th><th class="n">Área (m²)</th><th class="n">Perím. (m)</th><th class="n">Luz (VA)</th><th class="n">TUG</th><th class="n">TUG (VA)</th><th class="n">TUE (VA)</th></tr>${linhas}
     <tr class="total"><td>Total</td><td>${proj.comodos.length} cômodo(s)</td><td class="n">${fmt(ta)}</td><td class="n">—</td><td class="n">${tv}</td><td class="n">${tn}</td><td class="n">${tt}</td><td class="n">${te}</td></tr></table>
     <p class="aviso" style="margin-top:10px">Luz: mínimo pela NBR 5410 (1 ponto no teto por cômodo; 100 VA até 6 m², +60 VA a cada 4 m² inteiros). TUG: mínimo da NBR 5410 – máximo recomendado pelo app; VA calculado com o mínimo (600 VA nas 3 primeiras de cozinha, copa, área de serviço e banheiro; 100 VA nas demais). TUE: potência do aparelho; acima de 10 A na tensão do projeto (${tensao()} V), circuito exclusivo. Ferramenta de apoio: confira com profissional habilitado.</p>
-    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn primario" id="mTr">🎓 Treinar</button><button class="btn" id="mInsp">✅ Inspeção e testes</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
+    <div class="botoes"><button class="btn primario" id="mTr">🎓 Treinar</button><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn" id="mInsp">✅ Inspeção e testes</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
   $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mRel').onclick = mostrarRelatorio; $('#mTr').onclick = treinar; $('#mInsp').onclick = mostrarInspecao; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
   $('#modalConteudo').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { fecharModal(); definirModo('selecionar'); sel = { comodo: tr.dataset.id, parede: null }; render(); });
 };
@@ -1614,7 +1614,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=48').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=49').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
