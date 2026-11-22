@@ -826,8 +826,8 @@ $('#btnComodos').onclick = () => {
     <table><tr><th>Nome</th><th>Tipo</th><th class="n">Área (m²)</th><th class="n">Perím. (m)</th><th class="n">Luz (VA)</th><th class="n">TUG</th><th class="n">TUG (VA)</th><th class="n">TUE (VA)</th></tr>${linhas}
     <tr class="total"><td>Total</td><td>${proj.comodos.length} cômodo(s)</td><td class="n">${fmt(ta)}</td><td class="n">—</td><td class="n">${tv}</td><td class="n">${tn}</td><td class="n">${tt}</td><td class="n">${te}</td></tr></table>
     <p class="aviso" style="margin-top:10px">Luz: mínimo pela NBR 5410 (1 ponto no teto por cômodo; 100 VA até 6 m², +60 VA a cada 4 m² inteiros). TUG: mínimo da NBR 5410 – máximo recomendado pelo app; VA calculado com o mínimo (600 VA nas 3 primeiras de cozinha, copa, área de serviço e banheiro; 100 VA nas demais). TUE: potência do aparelho; acima de 10 A na tensão do projeto (${tensao()} V), circuito exclusivo. Ferramenta de apoio: confira com profissional habilitado.</p>
-    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
+    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mRel').onclick = mostrarRelatorio; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
   $('#modalConteudo').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { fecharModal(); definirModo('selecionar'); sel = { comodo: tr.dataset.id, parede: null }; render(); });
 };
 
@@ -1234,13 +1234,47 @@ function mostrarMateriais() {
     <table><tr><th>Item</th><th class="n">Qtd.</th></tr>${rows}</table>
     <div class="exp-norma" style="margin-top:10px"><b>🧮 Como o app estimou</b>${ls([`Fios: cada circuito leva fase, neutro e terra do quadro até o ponto mais longe + ${EXTRA_PONTO} m por ponto a mais, com a seção calculada em 🔀 Circuitos.`, `Retorno: ${RET_INT} m por interruptor (do interruptor até a luz), e mais ${RET_INT} m nos paralelos.`, 'Cores: neutro azul-claro e terra verde-amarelo (ou verde) são as da NBR 5410; fase e retorno podem ser outras cores, desde que não sejam essas.', `Tudo com ${Math.round((SOBRA - 1) * 100)}% de sobra pra emendas e perdas. Eletroduto ≈ 60% da soma dos caminhos, porque os circuitos dividem trechos perto do quadro.`])}</div>
     <p class="aviso">Estimativa pra orçamento. Confira na obra antes de comprar.</p>
-    <div class="botoes"><button class="btn primario" id="mCopiar">📋 Copiar lista</button><button class="btn" id="mQd2">📋 Quadro</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mQd2').onclick = mostrarQuadro;
+    <div class="botoes"><button class="btn primario" id="mCopiar">📋 Copiar lista</button><button class="btn" id="mRel2">📄 PDF</button><button class="btn" id="mQd2">📋 Quadro</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mQd2').onclick = mostrarQuadro; $('#mRel2').onclick = mostrarRelatorio;
   $('#mCopiar').onclick = () => {
     const txt = `Lista de materiais · ${proj.nome} (EletroMaster)\n` + m.linhas.map(([gr, it, q, ob]) => `• ${it}: ${q}${ob ? ` (${ob})` : ''}`).join('\n');
     const velho = () => { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); aviso('Lista copiada.'); } catch { aviso('Não deu pra copiar.'); } t.remove(); };
     if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => aviso('Lista copiada. Cole no WhatsApp ou nas notas.')).catch(velho); else velho();
   };
+}
+// v36: módulo 13 — relatório do projeto (imprimir / salvar em PDF)
+function capturarModal(f) { const o = abrirModal; let h = ''; abrirModal = x => { h = x; }; try { f(); } catch (e) { } finally { abrirModal = o; } return h; }
+function mostrarRelatorio() {
+  if (!proj.comodos.length) return aviso('Desenhe os cômodos primeiro.');
+  fecharModal();
+  const svg = $('#svg'), W = svg.clientWidth, H = svg.clientHeight, sel0 = sel; sel = { comodo: null, parede: null }; render();
+  const planta = new XMLSerializer().serializeToString(svg).replace('<svg', `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#0b1424;border-radius:8px"`);
+  sel = sel0; render();
+  const { lista, V } = circuitos(), g = geral(), al = alimentador(), m = materiais(), res = reservaQd(lista.length);
+  const unif = (capturarModal(mostrarUnifilar).match(/<svg[\s\S]*?<\/svg>/) || [''])[0].replace(/<svg width="(\d+)" height="(\d+)"/, '<svg style="width:100%;height:auto;background:#0d1626;border-radius:8px"');
+  const s1 = x => fmt(x, 1).replace(',0', '');
+  const com = proj.comodos.map(c => { const t = tug(c); return `<tr><td>${esc(c.nome)}</td><td>${nomeTipo(c.tipo)}</td><td>${fmt(area(c.pts))}</td><td>${fmt(perimetro(c.pts))}</td><td>${fmt(peDireito(c))}</td><td>${iluminacao(c.pts).va}</td><td>${t.min} / ${t.col}</td><td>${t.va}</td><td>${tueTotal(c)}</td></tr>`; }).join('');
+  const cir = lista.map(c => `<tr><td>${c.n}</td><td>${c.tipo}</td><td>${c.desc}</td><td>${c.va}</td><td>${fmt(c.i, 1)}</td><td>${s1(c.sec)}</td><td>${c.inn}</td><td>${c.dv != null ? fmt(c.dv, 2) : '—'}</td><td>${c.dr ? 'Sim' : '—'}</td></tr>`).join('');
+  const mat = m.linhas.map(([gr, it, q, ob]) => `<tr><td>${gr}</td><td>${esc(it)}${ob ? ` <small>(${esc(ob)})</small>` : ''}</td><td>${esc(q)}</td></tr>`).join('');
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const r = document.createElement('div'); r.id = 'relatorio';
+  r.innerHTML = `<div class="rel-barra"><button class="btn primario" id="relPdf">🖨️ Salvar em PDF</button><button class="btn" id="relFechar">Fechar</button></div>
+    <div class="rel-folha">
+      <h1>⚡ ${esc(proj.nome)}</h1>
+      <div class="rel-sub">Projeto elétrico residencial · ${hoje} · ${V} V · gerado no EletroMaster</div>
+      <h2>Planta baixa</h2>${planta}
+      <h2>Cômodos</h2><table><tr><th>Cômodo</th><th>Tipo</th><th>Área (m²)</th><th>Perím. (m)</th><th>Pé-dir. (m)</th><th>Luz (VA)</th><th>TUG mín./col.</th><th>TUG (VA)</th><th>TUE (VA)</th></tr>${com}</table>
+      <h2>Quadro de cargas</h2><table><tr><th>Nº</th><th>Circuito</th><th>Atende</th><th>VA</th><th>Ib (A)</th><th>Fio (mm²)</th><th>Disj. (A)</th><th>Queda (%)</th><th>DR</th></tr>${cir}</table>
+      <p>Demanda: <b>${fmt(g.d.dVA / 1000, 2)} kVA</b> (${fmt(g.ib, 1)} A) · Disjuntor geral: <b>${g.inn} A</b> · Alimentador: <b>${s1(al ? al.sec : g.sec)} mm²</b>${al ? ` (${fmt(al.L, 1)} m, queda ${fmt(al.dv, 2)}%)` : ''} · Reserva: ${res} espaço(s) · DPS classe II ${dpsUc()} V</p>
+      <h2>Diagrama unifilar</h2>${unif}
+      <h2>Lista de materiais (estimativa)</h2><table><tr><th>Grupo</th><th>Item</th><th>Qtd.</th></tr>${mat}</table>
+      <h2>Normas aplicadas</h2><p>ABNT NBR 5410 (iluminação e tomadas mínimas, divisão de circuitos, Ib ≤ In ≤ Iz, seção mínima, queda de tensão, DR 30 mA, DPS, espaço reserva, cores dos condutores) · Neoenergia Coelba DIS-NOR-030 (fatores de demanda) · simbologia usual (NBR 5444) · NR-10.</p>
+      <p class="rel-aviso">Documento de apoio gerado automaticamente. O projeto elétrico oficial deve ser elaborado e assinado por profissional habilitado, com ART, e conferido com as normas vigentes e a distribuidora.</p>
+      <div class="rel-ass">______________________________<br>Responsável técnico · registro / ART</div>
+    </div>`;
+  document.body.appendChild(r);
+  $('#relFechar').onclick = () => r.remove();
+  $('#relPdf').onclick = () => { try { window.print(); } catch (e) { aviso('Não deu pra abrir a impressão aqui. Abra o site no Safari e tente de novo.'); } };
 }
 function legendaPontos() {
   const cor = '#e8eef7';
@@ -1299,7 +1333,7 @@ const TUTO = [
   ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta. Arraste os cantos pra mexer.'],
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
-  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b> e a <b>🧾 Lista de materiais</b>.'],
+  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
   ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas.'],
   ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
   ['⚠️', 'Importante', 'O EletroMaster é ferramenta de apoio. Projeto oficial precisa de profissional habilitado e ART. Bom trabalho!']
@@ -1315,7 +1349,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=35').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=36').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
