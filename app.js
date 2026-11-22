@@ -376,7 +376,7 @@ function alternarParede(c, i) {
 // v41: tipos de abertura (porta de giro, dupla, de correr, vão livre, arco, janela)
 // v44: medidas comerciais mais usadas (largura × altura, peitoril das janelas), padrão muda com o cômodo
 const MED_ABERT = {
-  giro: { lista: [0.6, 0.7, 0.8, 0.9], alt: 2.1, padrao: t => ['banheiro', 'lavabo'].includes(t) ? 0.6 : ['area_servico', 'despensa'].includes(t) ? 0.7 : t === 'sala' ? 0.8 : 0.7 },
+  giro: { lista: [0.6, 0.7, 0.8, 0.9], alt: 2.1, padrao: t => ['sala', 'varanda'].includes(t) ? 0.8 : 0.7 },
   dupla: { lista: [1.2, 1.4, 1.6], alt: 2.1, padrao: () => 1.2 },
   correr: { lista: [0.8, 1.0, 1.2, 1.5, 2.0], alt: 2.1, padrao: t => ['varanda', 'sala'].includes(t) ? 2.0 : 0.8 },
   vao: { lista: [0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0], alt: 2.1, padrao: () => 0.8 },
@@ -1584,7 +1584,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=44').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=45').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
