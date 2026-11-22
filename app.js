@@ -827,8 +827,8 @@ $('#btnComodos').onclick = () => {
     <table><tr><th>Nome</th><th>Tipo</th><th class="n">Área (m²)</th><th class="n">Perím. (m)</th><th class="n">Luz (VA)</th><th class="n">TUG</th><th class="n">TUG (VA)</th><th class="n">TUE (VA)</th></tr>${linhas}
     <tr class="total"><td>Total</td><td>${proj.comodos.length} cômodo(s)</td><td class="n">${fmt(ta)}</td><td class="n">—</td><td class="n">${tv}</td><td class="n">${tn}</td><td class="n">${tt}</td><td class="n">${te}</td></tr></table>
     <p class="aviso" style="margin-top:10px">Luz: mínimo pela NBR 5410 (1 ponto no teto por cômodo; 100 VA até 6 m², +60 VA a cada 4 m² inteiros). TUG: mínimo da NBR 5410 – máximo recomendado pelo app; VA calculado com o mínimo (600 VA nas 3 primeiras de cozinha, copa, área de serviço e banheiro; 100 VA nas demais). TUE: potência do aparelho; acima de 10 A na tensão do projeto (${tensao()} V), circuito exclusivo. Ferramenta de apoio: confira com profissional habilitado.</p>
-    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mRel').onclick = mostrarRelatorio; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
+    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn primario" id="mTr">🎓 Treinar</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mRel').onclick = mostrarRelatorio; $('#mTr').onclick = treinar; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
   $('#modalConteudo').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { fecharModal(); definirModo('selecionar'); sel = { comodo: tr.dataset.id, parede: null }; render(); });
 };
 
@@ -1336,6 +1336,69 @@ function legendaPontos() {
 // ---------- início ----------
 renderLista();
 // v29: Livro de normas — mostra quais normas o app está aplicando neste projeto agora
+// v38: módulo 14 — modo aprendizagem (treino com perguntas da norma e do próprio projeto)
+const QUIZ_FIXO = [
+  ['Qual a carga mínima de iluminação num cômodo de até 6 m²?', '100 VA', ['60 VA', '160 VA', '200 VA'], 'A NBR 5410 pede pelo menos 100 VA de iluminação em cômodo de até 6 m².'],
+  ['Num cômodo com mais de 6 m², quanto se soma de iluminação?', '60 VA a cada 4 m² inteiros', ['100 VA a cada 6 m²', '60 VA a cada 5 m²', '40 VA a cada m²'], '100 VA pros primeiros 6 m² e mais 60 VA a cada 4 m² inteiros que sobram.'],
+  ['Quanto vale cada uma das 3 primeiras tomadas da cozinha?', '600 VA', ['100 VA', '300 VA', '1000 VA'], 'Em cozinha, copa, área de serviço e banheiro, as 3 primeiras tomadas valem 600 VA cada; as outras, 100 VA.'],
+  ['Na sala e no quarto, quantas tomadas no mínimo?', '1 a cada 5 m de perímetro', ['1 a cada 3,5 m de perímetro', '2 por cômodo, sempre', '1 a cada 10 m²'], 'Sala e dormitório: uma tomada a cada 5 m de perímetro (ou fração), bem distribuídas.'],
+  ['Na cozinha, quantas tomadas no mínimo?', '1 a cada 3,5 m de perímetro', ['1 a cada 5 m de perímetro', '1 por bancada', '3 fixas'], 'Cozinha, copa e área de serviço: uma a cada 3,5 m de perímetro, com duas acima da bancada da pia.'],
+  ['Qual a sensibilidade do DR para proteger pessoas?', '30 mA', ['300 mA', '10 A', '100 mA'], 'Dispositivo DR de alta sensibilidade (até 30 mA) em banheiros, cozinha, área de serviço, áreas externas e tomadas de áreas molhadas.'],
+  ['Seção mínima do fio de um circuito de tomadas?', '2,5 mm²', ['1,5 mm²', '1,0 mm²', '4 mm²'], 'Tomadas (força) pedem no mínimo 2,5 mm² de cobre; iluminação, 1,5 mm².'],
+  ['Seção mínima do fio de iluminação?', '1,5 mm²', ['0,75 mm²', '2,5 mm²', '1,0 mm²'], 'Circuito de iluminação: no mínimo 1,5 mm² de cobre.'],
+  ['Qual a cor do condutor neutro?', 'Azul-claro', ['Verde-amarelo', 'Preto', 'Vermelho'], 'Neutro é azul-claro. Terra (PE) é verde-amarelo ou verde. Fase pode ser outras cores, como preto, vermelho ou branco.'],
+  ['Qual a cor do condutor de proteção (terra)?', 'Verde-amarelo', ['Azul-claro', 'Branco', 'Cinza'], 'O terra (PE) é verde-amarelo, ou verde. Essa cor não pode ser usada em outro condutor.'],
+  ['Qual a regra do disjuntor certo?', 'Ib ≤ In ≤ Iz', ['In ≤ Ib ≤ Iz', 'Iz ≤ In ≤ Ib', 'In = Iz'], 'A corrente do circuito (Ib) tem que ser menor ou igual ao disjuntor (In), e o disjuntor menor ou igual ao que o fio aguenta (Iz).'],
+  ['Queda de tensão máxima nos circuitos terminais (usada no app)?', '4%', ['1%', '10%', '7%'], 'O app limita 4% do quadro ao ponto mais longe e 1% no alimentador, somando até 5% desde a entrega.'],
+  ['Um aparelho de 1.500 W numa tomada comum em 127 V passa de 10 A. O que fazer?', 'Ligar como TUE, com circuito próprio', ['Usar benjamim', 'Trocar só a tomada', 'Nada, está ok'], '1500 ÷ 127 ≈ 11,8 A. Acima de 10 A o ideal é tomada de uso específico (TUE) com circuito exclusivo.'],
+  ['Pela NR-10, como se trabalha na instalação?', 'Com o circuito desenergizado e bloqueado', ['Com o disjuntor ligado, com cuidado', 'Só de luva comum', 'Com o DR desligado'], 'NR-10: desenergizar, bloquear, testar a ausência de tensão e aterrar antes de mexer.'],
+  ['Onde a Coelba pede o medidor (padrão de entrada)?', 'No limite do terreno com a rua', ['No meio da sala', 'Dentro da cozinha', 'Em qualquer lugar'], 'O padrão de entrada fica no muro ou na fachada, virado pra rua, com acesso livre pra leitura.'],
+  ['Quantos circuitos de reserva deixar no quadro?', 'Depende do número de circuitos (a NBR 5410 dá uma tabela)', ['Nenhum', 'Sempre 1', 'Sempre 10'], 'A NBR 5410 pede espaço reserva conforme o número de circuitos: até 6 → 2; 7 a 12 → 3; 13 a 30 → 4; acima → 15%.']
+];
+function quizProjeto() {
+  const q = [], mix = (c, e) => { const s = [...new Set(e.filter(x => x !== c))].slice(0, 3); return s.length === 3 ? s : null; };
+  proj.comodos.forEach(c => {
+    const l = iluminacao(c.pts).va, a = area(c.pts), e = mix(l + ' VA', [l + 60 + ' VA', Math.max(100, l - 60) + ' VA', l + 120 + ' VA', l + 100 + ' VA']);
+    if (e) q.push([`${esc(c.nome)} tem ${fmt(a)} m². Qual a carga mínima de iluminação?`, l + ' VA', e, `${fmt(a)} m² → ${a <= 6 ? 'até 6 m², 100 VA' : `100 VA + 60 VA × ${Math.floor((a - 6 + 1e-9) / 4)} (cada 4 m² inteiros acima de 6) = ${l} VA`}.`]);
+    const t = tug(c), e2 = mix(String(t.min), [t.min + 1, t.min + 2, Math.max(1, t.min - 1), t.min + 3].map(String));
+    if (e2) q.push([`${esc(c.nome)} (${nomeTipo(c.tipo)}, ${fmt(perimetro(c.pts))} m de perímetro). Quantas tomadas no mínimo?`, String(t.min), e2, `${nomeTipo(c.tipo)}: ${t.obs} → mínimo de ${t.min}.`]);
+  });
+  const { lista, V } = circuitos(), D = [6, 10, 13, 16, 20, 25, 32, 40, 50, 63], S = ['1,5', '2,5', '4', '6', '10', '16'];
+  lista.forEach(c => {
+    const k = D.indexOf(c.inn), e = mix(c.inn + ' A', [D[k + 1], D[k - 1], D[k + 2], D[k - 2]].filter(Boolean).map(x => x + ' A'));
+    if (e) q.push([`Circuito ${c.n} (${String(c.desc).replace(/<[^>]+>/g, "")}): ${c.va} VA em ${V} V. Qual disjuntor?`, c.inn + ' A', e, `Ib = ${c.va} ÷ ${V} = ${fmt(c.i, 1)} A. Escolhe o disjuntor comercial que fica acima de Ib e protege o fio (Ib ≤ In ≤ Iz): ${c.inn} A.`]);
+    const s = fmt(c.sec, 1).replace(',0', ''), j = S.indexOf(s), e3 = j >= 0 && mix(s + ' mm²', [S[j + 1], S[j - 1], S[j + 2], S[j - 2]].filter(Boolean).map(x => x + ' mm²'));
+    if (e3) q.push([`Circuito ${c.n} (${String(c.desc).replace(/<[^>]+>/g, "")}). Qual o fio?`, s + ' mm²', e3, `Mínimo da norma (${c.tipo === 'Iluminação' ? '1,5' : '2,5'} mm²), depois sobe até aguentar a corrente e a queda de tensão ficar ≤ 4%: ${s} mm².`]);
+  });
+  return q;
+}
+function treinar() {
+  const emb = x => x.map(v => [Math.random(), v]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
+  const doProj = proj && proj.comodos.length ? emb(quizProjeto()).slice(0, 5) : [];
+  const rod = emb([...doProj, ...emb(QUIZ_FIXO).slice(0, 10 - doProj.length)]);
+  let i = 0, ok = 0;
+  const tela = () => {
+    if (i >= rod.length) {
+      const t = banco.treino = banco.treino || { acertos: 0, total: 0 }; t.acertos += ok; t.total += rod.length; salvar();
+      abrirModal(`<h2>🎓 Resultado</h2><div style="font-size:42px;text-align:center;margin:14px 0">${ok}/${rod.length}</div><div class="medidas" style="text-align:center;margin-bottom:12px">${ok >= 8 ? 'Mandou bem! 👏' : ok >= 5 ? 'Bom caminho. Revise as explicações e tente de novo.' : 'Bora revisar: o 📘 Livro de normas ajuda.'}<br>No total: ${t.acertos} acertos em ${t.total} perguntas.</div><div class="botoes"><button class="btn" id="mCanc">Fechar</button><button class="btn primario" id="qDe">🔁 Treinar de novo</button></div>`);
+      $('#mCanc').onclick = fecharModal; $('#qDe').onclick = treinar; return;
+    }
+    const [p, c, e, ex] = rod[i], ops = emb([c, ...e]);
+    abrirModal(`<h2>🎓 Modo aprendizagem · ${i + 1}/${rod.length}</h2><div style="font-size:16px;margin:8px 0 12px;line-height:1.4">${p}</div>
+      ${ops.map((o, k) => `<button class="btn" data-op="${k}" style="display:block;width:100%;text-align:left;margin-bottom:8px">${o}</button>`).join('')}
+      <div id="qEx" style="display:none;font-size:14px;line-height:1.45;margin:10px 0"></div>
+      <div class="botoes"><button class="btn" id="mCanc">Sair</button><button class="btn primario" id="qProx" style="display:none">Próxima ›</button></div>`);
+    $('#mCanc').onclick = fecharModal; $('#qProx').onclick = () => { i++; tela(); };
+    document.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
+      const certo = ops[+b.dataset.op] === c; if (certo) ok++;
+      document.querySelectorAll('[data-op]').forEach(x => { x.disabled = true; if (ops[+x.dataset.op] === c) x.style.background = '#1f6b3a'; });
+      if (!certo) b.style.background = '#7a2330';
+      const qe = $('#qEx'); qe.style.display = 'block'; qe.innerHTML = `${certo ? '✅ Certo!' : `❌ A resposta é <b>${c}</b>.`}<br>📘 ${ex}`;
+      $('#qProx').style.display = ''; $('#qProx').textContent = i + 1 >= rod.length ? 'Ver resultado' : 'Próxima ›';
+    });
+  };
+  tela();
+}
 function livroNormas() {
   const cs = proj ? proj.comodos : [], tem = cs.length > 0;
   const pontos = cs.flatMap(c => c.pontos || []), qdc = pontos.some(q => q.k === 'qdc');
@@ -1365,8 +1428,8 @@ function livroNormas() {
     it(tomCol || ints || qdc, 'Símbolos de tomadas, interruptores e quadro', 'Tomada baixa, média e alta; interruptor simples e paralelo; quadro de distribuição.', 'modo 🔌 Pontos · Legenda'));
   h += sec('NR-10 · Segurança em eletricidade', 'Norma do Ministério do Trabalho.',
     it(true, 'Aviso de segurança', 'O EletroMaster é ferramenta de apoio. Execução e projeto oficial exigem profissional habilitado, ART e serviço com o circuito desenergizado.', 'sempre'));
-  h += `<div style="font-size:12px;opacity:.6;margin:12px 0">Confira sempre a versão vigente das normas. Projeto oficial precisa de responsável técnico.</div><button class="btn primario" id="lnOk" style="width:100%">Fechar</button>`;
-  abrirModal(h); $('#lnOk').onclick = fecharModal;
+  h += `<div style="font-size:12px;opacity:.6;margin:12px 0">Confira sempre a versão vigente das normas. Projeto oficial precisa de responsável técnico.</div><button class="btn primario" id="lnTr" style="width:100%;margin-bottom:8px">🎓 Treinar (modo aprendizagem)</button><button class="btn" id="lnOk" style="width:100%">Fechar</button>`;
+  abrirModal(h); $('#lnOk').onclick = fecharModal; $('#lnTr').onclick = treinar;
 }
 $('#btnNormas').onclick = livroNormas;
 // v31: tutorial de como usar (passo a passo); abre na 1ª vez que entra no editor e pelo botão 🎓
@@ -1378,7 +1441,7 @@ const TUTO = [
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas. Em <b>🛣️ Rua e muro</b> você desenha a rua e o medidor fica no muro.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
   ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
-  ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas.'],
+  ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas, e o <b>🎓 Treinar</b> faz perguntas com o seu próprio projeto.'],
   ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
   ['⚠️', 'Importante', 'O EletroMaster é ferramenta de apoio. Projeto oficial precisa de profissional habilitado e ART. Bom trabalho!']
 ];
@@ -1393,7 +1456,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=37').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=38').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
