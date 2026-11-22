@@ -43,7 +43,17 @@ function tug(c) {
   else if (c.tipo === 'varanda') { min = 1; obs = 'pelo menos 1'; }
   else { min = a <= 6 ? 1 : por(5); obs = a <= 2.25 ? '1 (pode ficar do lado de fora, até 0,80 m da porta)' : a <= 6 ? '1 (até 6 m²)' : '1 a cada 5 m de perímetro'; }
   const max = min + (EXTRA_REC[c.tipo] ?? 1), col = (c.pontos || []).filter(q => q.k === 'tom').length, n = Math.max(min, col);
-  return { min, max, col, n, va: tugVA(c.tipo, n), vaMax: tugVA(c.tipo, max), obs };
+  const sl = tomSlots(c, n), vaN = tugVA(c.tipo, n), va = sl.reduce((s, x) => s + x.va, 0);
+  return { min, max, col, n, va, vaNorma: vaN, vaAp: va - vaN, vaMax: Math.max(tugVA(c.tipo, max), va), obs };
+}
+// v32: aparelhos ligados em tomada comum (TUG). Carga de cada tomada = maior entre o valor da norma e a soma dos aparelhos.
+const APAR_TUG = [['geladeira', 'Geladeira', 250, 0.9], ['freezer', 'Freezer', 300, 0.9], ['micro', 'Micro-ondas', 1400, 0.95], ['airfryer', 'Air fryer', 1500, 1], ['liquid', 'Liquidificador', 600, 0.9], ['cafe', 'Cafeteira', 800, 1], ['sanduich', 'Sanduicheira', 750, 1], ['tv', 'TV', 150, 0.9], ['pc', 'Computador', 300, 0.9], ['note', 'Notebook', 90, 0.9], ['carreg', 'Carregador de celular', 20, 0.9], ['vent', 'Ventilador', 120, 0.9], ['ferro', 'Ferro de passar', 1200, 1], ['secador', 'Secador de cabelo', 1300, 1], ['chapinha', 'Chapinha', 60, 1], ['aspir', 'Aspirador', 1200, 0.9], ['roteador', 'Roteador/Wi-Fi', 15, 0.9], ['som', 'Som', 100, 0.9], ['outro', 'Outro aparelho', 100, 1]];
+const apVA = u => Math.round(u.w / (u.fp || 1));
+const apSoma = q => (q.ap || []).reduce((s, u) => s + apVA(u), 0);
+function tomSlots(c, n) { // uma linha por tomada (colocadas na ordem da planta + as que faltam p/ o mínimo)
+  const tom = (c.pontos || []).filter(q => q.k === 'tom'), out = [];
+  for (let k = 1; k <= n; k++) { const q = tom[k - 1], base = tugVA(c.tipo, k) - tugVA(c.tipo, k - 1), ap = q ? apSoma(q) : 0; out.push({ q, base, ap, va: Math.max(base, ap) }); }
+  return out;
 }
 function perimetro(pts) { let s = 0; for (let i = 0; i < pts.length; i++) s += dist(pts[i], pts[(i + 1) % pts.length]); return s; }
 function centroide(pts) {
@@ -485,7 +495,7 @@ function renderPainel() {
     <div class="linha medidas">Área <b>${fmt(area(c.pts))} m²</b> · Perímetro <b>${fmt(perimetro(c.pts))} m</b> · ${c.pts.length} paredes</div>
     <div class="linha medidas">Pé-direito (altura) <input id="inAlt" class="num" type="text" inputmode="decimal" value="${fmt(peDireito(c))}" style="max-width:80px"> m · Volume <b>${fmt(area(c.pts) * peDireito(c), 1)} m³</b> · Paredes <b>${fmt(perimetro(c.pts) * peDireito(c), 1)} m²</b> <button class="btn" id="btnAltTodos">Usar em todos</button></div>
     <div class="linha medidas">💡 Iluminação (NBR 5410): mín. <b>1 ponto no teto</b> com interruptor · carga mín. <b>${iluminacao(c.pts).va} VA</b></div>
-    <div class="linha medidas">🔌 Tomadas TUG: mín. <b>${tug(c).min}</b> (NBR 5410: ${tug(c).obs}) · recomendado até <b>${tug(c).max}</b> · colocadas na planta <b>${tug(c).col}</b> · carga <b>${tug(c).va} VA</b></div>
+    <div class="linha medidas">🔌 Tomadas TUG: mín. <b>${tug(c).min}</b> (NBR 5410: ${tug(c).obs}) · recomendado até <b>${tug(c).max}</b> · colocadas na planta <b>${tug(c).col}</b> · carga <b>${tug(c).va} VA</b>${tug(c).vaAp > 0 ? ` (norma ${tug(c).vaNorma} + ${tug(c).vaAp} pelos aparelhos)` : ''}</div>
     <div class="linha medidas">⚡ TUE: ${(c.tue || []).length ? (c.tue || []).map(u => `<span class="chip" data-edtue="${u.id}">✏️ ${esc(u.nome)} ${u.w} W · ${fmt(tueA(u), 1)} A${tueA(u) > 10 ? ' · circ. exclusivo' : ''} <button class="x" data-tue="${u.id}">✕</button></span>`).join(' ') + ` · total <b>${tueTotal(c)} VA</b>` : 'nenhuma'} <button class="btn" id="btnTUE">+ TUE</button><button class="btn" id="btnTensao" title="Tensão da instalação">🔁 ${tensao()} V</button></div>
     <div class="linha"><button class="btn" id="btnPorque">❓ Por que esses valores?</button><button class="btn" id="btnDup">Duplicar</button><button class="btn perigo" id="btnExc">Excluir</button></div>`;
   p.querySelector('#inNome').onchange = e => { const v = e.target.value.trim(); if (!v) return; checkpoint(); c.nome = v; gravar(); render(); };
@@ -646,7 +656,8 @@ function circuitos() {
   const luz = cs.map(c => ({ nome: c.nome, dr: drComodo(c, true), va: iluminacao(c.pts).va, n: 1, d: distQdc(centroide(c.pts), Q, peDireito(c), peDireito(c)) }));
   agrupar(luz, limL).forEach(g => out.push({ tipo: 'Iluminação', desc: resumoItens(g.itens), va: g.va, L: g.L, dr: g.itens.some(i => i.dr) }));
   const tomadas = grupo => cs.filter(grupo).flatMap(c => { const t = tug(c), arr = [], tom = (c.pontos || []).filter(q => q.k === 'tom').map(q => ({ g: geoPonto(c, q), h: ALT_M[q.alt] ?? 0.3 })).filter(x => x.g);
-    for (let k = 1; k <= t.n; k++) { const tk = tom[k - 1]; arr.push({ nome: c.nome, dr: drComodo(c), va: tugVA(c.tipo, k) - tugVA(c.tipo, k - 1), n: 1, d: distQdc(tk ? tk.g.m : centroide(c.pts), Q, peDireito(c), tk ? tk.h : 0.3) }); } return arr; });
+    const sl = tomSlots(c, t.n);
+    for (let k = 1; k <= t.n; k++) { const tk = tom[k - 1]; arr.push({ nome: c.nome, dr: drComodo(c), va: sl[k - 1].va, n: 1, d: distQdc(tk ? tk.g.m : centroide(c.pts), Q, peDireito(c), tk ? tk.h : 0.3) }); } return arr; });
   agrupar(tomadas(c => !MOLH_CIRC.includes(c.tipo)), lim).forEach(g => out.push({ tipo: 'TUG', desc: resumoItens(g.itens), va: g.va, L: g.L, dr: g.itens.some(i => i.dr) }));
   agrupar(tomadas(c => MOLH_CIRC.includes(c.tipo)), lim).forEach(g => out.push({ tipo: 'TUG (cozinha/serviço)', desc: resumoItens(g.itens), va: g.va, L: g.L, dr: true }));
   cs.forEach(c => (c.tue || []).forEach(u => out.push({ tipo: 'TUE', desc: `${esc(u.nome)} (${esc(c.nome)})`, va: tueVA(u), exclusivo: tueA(u) > 10, dr: drComodo(c), L: distQdc(centroide(c.pts), Q, peDireito(c), 1.3) })));
@@ -1063,6 +1074,7 @@ function painelPontos(p) {
     if (q.k === 'qdc') h += `<div class="linha medidas">▣ Quadro de distribuição (QDC) · arraste pra mudar de lugar <button class="btn perigo" id="pExc">✕ Excluir</button></div>`;
     else h += `<div class="linha">${q.k === 'tom' ? `Tomada <select id="pAlt">${Object.entries(ALT).map(([k, [n, a]]) => `<option value="${k}" ${q.alt === k ? 'selected' : ''}>${n} (${a})</option>`).join('')}</select><select id="pDupla"><option value="0" ${q.dupla ? '' : 'selected'}>Simples</option><option value="1" ${q.dupla ? 'selected' : ''}>Dupla</option></select>` : `Interruptor <select id="pTipoInt"><option value="int" ${q.k === 'int' ? 'selected' : ''}>Simples</option><option value="par" ${q.k === 'par' ? 'selected' : ''}>Paralelo (three-way)</option></select>`}
       <button class="btn perigo" id="pExc">✕ Excluir</button></div>`;
+    if (q.k === 'tom') { const sl = tomSlots(ach.c, tug(ach.c).n).find(x => x.q === q); h += `<div class="linha medidas">🔌 Aparelhos nesta tomada: ${(q.ap || []).length ? q.ap.map(u => `<span class="chip">${esc(u.nome)} ${u.w} W <button class="x" data-apx="${u.id}">✕</button></span>`).join(' ') : 'nenhum'} <button class="btn" id="pAp">+ Aparelho</button>${sl ? `<br>Carga usada: <b>${sl.va} VA</b> (norma ${sl.base} VA${sl.ap ? ` · aparelhos ${sl.ap} VA` : ''}; vale o maior)` : ''}</div>`; }
   }
   p.innerHTML = h;
   p.querySelectorAll('[data-ferr]').forEach(b => b.onclick = () => { ferramenta = b.dataset.ferr; selPonto = null; render(); });
@@ -1073,8 +1085,24 @@ function painelPontos(p) {
     if (a) a.onchange = e => { checkpoint(); q.alt = e.target.value; gravar(); render(); };
     const du = p.querySelector('#pDupla'); if (du) du.onchange = e => { checkpoint(); q.dupla = e.target.value === '1'; gravar(); render(); };
     if (ti) ti.onchange = e => { checkpoint(); q.k = e.target.value; gravar(); render(); };
+    const pa = p.querySelector('#pAp'); if (pa) pa.onclick = () => novoAparelho(q);
+    p.querySelectorAll('[data-apx]').forEach(b => b.onclick = () => { checkpoint(); q.ap = q.ap.filter(u => u.id !== b.dataset.apx); gravar(); render(); });
     p.querySelector('#pExc').onclick = () => { checkpoint(); ach.c.pontos = ach.c.pontos.filter(x => x.id !== q.id); selPonto = null; gravar(); render(); };
   }
+}
+function novoAparelho(q) {
+  abrirModal(`<h2>🔌 Aparelho na tomada</h2>
+    <div class="campo"><label>Aparelho</label><select id="mAp">${APAR_TUG.map(e => `<option value="${e[0]}">${e[1]} · ${e[2]} W</option>`).join('')}</select></div>
+    <div class="dupla"><div class="campo"><label>Nome</label><input id="mApNome" type="text" maxlength="40"></div><div class="campo"><label>Potência (W)</label><input id="mApW" type="text" inputmode="numeric" style="max-width:110px"></div></div>
+    <div id="mApInfo" class="medidas" style="font-size:13px;margin-bottom:10px"></div>
+    <div style="font-size:12px;opacity:.7;margin-bottom:10px">Veja a potência na etiqueta do aparelho. O app usa na tomada o maior valor entre a norma (100 ou 600 VA) e a soma dos aparelhos.</div>
+    <div class="botoes"><button class="btn" id="mCanc">Cancelar</button><button class="btn primario" id="mOk">Adicionar</button></div>`);
+  const s = $('#mAp'), nm = $('#mApNome'), w = $('#mApW'), eq = () => APAR_TUG.find(e => e[0] === s.value);
+  const info = () => { const e = eq(), W = +String(w.value).replace(',', '.') || 0, i = W / (e[3] || 1) / tensao(); $('#mApInfo').innerHTML = `${Math.round(W / (e[3] || 1))} VA · ${fmt(i, 1)} A em ${tensao()} V${i > 10 ? ' · ⚠️ passa de 10 A: o ideal é ligar como TUE, com circuito próprio' : ''}`; };
+  const fill = () => { const e = eq(); nm.value = e[1]; w.value = e[2]; info(); };
+  s.onchange = fill; w.oninput = info; fill();
+  $('#mCanc').onclick = fecharModal;
+  $('#mOk').onclick = () => { const e = eq(), W = Math.round(+String(w.value).replace(',', '.')); if (!(W > 0)) return aviso('Digite a potência em W'); checkpoint(); (q.ap = q.ap || []).push({ id: uid(), eq: e[0], nome: nm.value.trim() || e[1], w: W, fp: e[3] }); fecharModal(); gravar(); render(); };
 }
 function legendaPontos() {
   const cor = '#e8eef7';
@@ -1148,7 +1176,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=31').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=32').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
