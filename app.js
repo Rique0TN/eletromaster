@@ -167,14 +167,17 @@ function abrirLink() {
     const u = EMNuvem.usuario(), email = u && (u.email || '').toLowerCase();
     if (u && d.dono === u.uid) { const meu = banco.projetos.find(p => p.compId === sid); if (meu) { abrirProjeto(meu.id); return; } }
     let p; try { p = JSON.parse(d.dados); } catch { return aviso('Não consegui abrir o projeto.'); }
+    const k = new URLSearchParams(location.search).get('c');
+    if (k && u) return EMNuvem.entrarComChave(sid, k).then(() => { banco.compLinks = [...new Set([...(banco.compLinks || []), sid])]; salvar(); abrirCompartilhado(p, sid, 'editar', d.donoNome); }).catch(() => { aviso('Esse link de colaborador não vale mais. Abrindo só pra ver.'); abrirCompartilhado(p, sid, 'ver', d.donoNome); });
     abrirCompartilhado(p, sid, email && (d.editores || []).includes(email) ? 'editar' : 'ver', d.donoNome);
+    if (k && !u) setTimeout(() => aviso('Esse é um link de colaborador: entre com Google (na lista de projetos) e abra o link de novo pra editar.'), 2500);
   }).catch(() => aviso('Não consegui abrir o link agora. Confira a internet.'));
 }
 function renderComp() {
   const el = $('#abaComp'); if (!el || !window.EMNuvem) return;
   if (!EMNuvem.usuario()) { el.innerHTML = '<div class="vazio">Entre com Google pra ver os projetos que outras pessoas compartilharam com você pra editar. Quem só tem o link abre direto, sem login.</div>'; return; }
   el.innerHTML = '<div class="vazio">Carregando…</div>';
-  EMNuvem.listarComp().then(l => {
+  EMNuvem.listarComp().then(l => Promise.all((banco.compLinks || []).filter(s => !l.some(x => x.sid === s)).map(s => EMNuvem.lerComp(s).then(d => d ? { sid: s, ...d } : null).catch(() => null))).then(m => l.concat(m.filter(Boolean)))).then(l => {
     if (!l.length) { el.innerHTML = '<div class="vazio">Nada por aqui ainda. Quando alguém colocar seu e-mail como colaborador num projeto, ele aparece aqui.</div>'; return; }
     el.innerHTML = l.sort((x, y) => (y.atualizado || 0) - (x.atualizado || 0)).map(d => `<div class="cartao" data-sid="${d.sid}"><h3>${esc(d.nome || 'Projeto')}</h3><div class="info">de ${esc(d.donoNome || d.donoEmail || 'alguém')} · editado ${new Date(d.atualizado || 0).toLocaleDateString('pt-BR')}</div><div class="acoes"><button class="btn primario">✏️ Abrir e editar</button></div></div>`).join('');
     el.querySelectorAll('[data-sid]').forEach(c => c.querySelector('button').onclick = () => { const d = l.find(x => x.sid === c.dataset.sid); try { abrirCompartilhado(JSON.parse(d.dados), d.sid, 'editar', d.donoNome); } catch { aviso('Não consegui abrir.'); } });
@@ -196,17 +199,23 @@ function abrirCompartilhar() {
     abrirModal(`<h2>🔗 Compartilhar projeto</h2>
       <div class="campo"><label>👁 Link pra visualizar (sem login)</label><input type="text" readonly value="${url}" id="mUrl"></div>
       <div class="linha" style="gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn primario" id="mCopLk">📋 Copiar link</button>${navigator.share ? '<button class="btn" id="mShare">📤 Enviar</button>' : ''}</div>
-      <div class="campo"><label>✏️ Colaboradores (podem editar)</label>${eds.map(e => `<div class="linha" style="justify-content:space-between;padding:4px 0">${esc(e)} <button class="btn perigo" data-rm="${esc(e)}">✕</button></div>`).join('') || '<div style="opacity:.7;font-size:13px">Ninguém ainda.</div>'}</div>
+      <div class="campo"><label>✏️ Link de colaborador (edita junto, precisa entrar com Google)</label>${proj.compChave ? `<input type="text" readonly value="${url}&c=${proj.compChave}" id="mUrlEd">` : ''}</div>
+      <div class="linha" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">${proj.compChave ? '<button class="btn primario" id="mCopEd">📋 Copiar link de colaborador</button><button class="btn" id="mTrocaEd">🔄 Trocar link</button>' : '<button class="btn" id="mGerEd">Gerar link de colaborador</button>'}</div>
+      <div class="campo"><label>✏️ Ou colaboradores por e-mail</label>${eds.map(e => `<div class="linha" style="justify-content:space-between;padding:4px 0">${esc(e)} <button class="btn perigo" data-rm="${esc(e)}">✕</button></div>`).join('') || '<div style="opacity:.7;font-size:13px">Ninguém ainda.</div>'}</div>
       <div class="linha" style="gap:8px"><input type="email" id="mEmail" placeholder="email@gmail.com" style="flex:1"><button class="btn" id="mAddEd">+ Adicionar</button></div>
       <div style="font-size:12px;opacity:.7;margin:8px 0">O colaborador entra com esse e-mail Google e o projeto aparece na aba Compartilhados comigo. Mande o link pra ele também.</div>
       <div class="botoes"><button class="btn perigo" id="mParar">Parar de compartilhar</button><button class="btn primario" id="mCanc">Pronto</button></div>`);
     $('#mCanc').onclick = fecharModal;
     $('#mCopLk').onclick = () => { try { navigator.clipboard.writeText(url).then(() => aviso('Link copiado!')); } catch { $('#mUrl').select(); } };
     if ($('#mShare')) $('#mShare').onclick = () => navigator.share({ title: proj.nome, text: `Projeto elétrico "${proj.nome}" no EletroMaster`, url }).catch(() => { });
+    const novaChave = () => EMNuvem.criarChave(sid).then(k => { const velha = proj.compChave; proj.compChave = k; gravar(); if (velha) EMNuvem.apagarChave(sid, velha).catch(() => { }); abrirCompartilhar(); }).catch(() => aviso('Não consegui gerar agora.'));
+    if ($('#mGerEd')) $('#mGerEd').onclick = novaChave;
+    if ($('#mTrocaEd')) $('#mTrocaEd').onclick = novaChave;
+    if ($('#mCopEd')) $('#mCopEd').onclick = () => { try { navigator.clipboard.writeText($('#mUrlEd').value).then(() => aviso('Link de colaborador copiado! Quem abrir e entrar com Google pode editar.')); } catch { $('#mUrlEd').select(); } };
     const salvarEds = l => EMNuvem.editores(sid, l).then(abrirCompartilhar).catch(() => aviso('Não consegui salvar agora.'));
     $('#mAddEd').onclick = () => { const e = $('#mEmail').value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return aviso('Digite um e-mail válido.'); if (eds.includes(e)) return aviso('Já está na lista.'); salvarEds([...eds, e]); };
     document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => salvarEds(eds.filter(x => x !== b.dataset.rm)));
-    $('#mParar').onclick = () => { EMNuvem.pararComp(sid).then(() => { delete proj.compId; gravar(); fecharModal(); aviso('O link parou de funcionar.'); }).catch(() => aviso('Não consegui agora.')); };
+    $('#mParar').onclick = () => { EMNuvem.pararComp(sid).then(() => { delete proj.compId; delete proj.compChave; gravar(); fecharModal(); aviso('O link parou de funcionar.'); }).catch(() => aviso('Não consegui agora.')); };
   }).catch(() => aviso('Não consegui abrir o compartilhamento agora.'));
 }
 $('#btnCompart').onclick = abrirCompartilhar;
@@ -1605,7 +1614,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=47').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=48').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
