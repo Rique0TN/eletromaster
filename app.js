@@ -398,6 +398,7 @@ function renderDica() {
     else if (rascunho.length < 3) t = 'Arraste de novo pra próxima parede (ou digite a medida e use as setas)';
     else t = 'Continue, ou arraste até o ponto verde pra fechar';
   } else if (modo === 'pontos') t = proj.comodos.length ? 'Escolha o tipo embaixo e toque perto da parede pra colocar. Arraste pra mudar de lugar.' : 'Desenhe um cômodo primeiro';
+  else if (modo === 'ver') t = 'Modo livre: arraste pra mover e use a pinça pro zoom. Toque num modo embaixo pra editar.';
   else if (!proj.comodos.length) t = 'Toque em Desenhar ou Retângulo para começar';
   else if (!sel.comodo) t = 'Toque num cômodo ou numa parede';
   else if (sel.parede == null) t = 'Arraste cantos ou portas, ou toque numa parede pra medida e porta';
@@ -447,6 +448,7 @@ function renderPainel() {
     return;
   }
   p.dataset.tipo = '';
+  if (modo === 'ver') { p.classList.remove('aberto'); p.innerHTML = ''; return; }
   if (modo === 'pontos') { painelPontos(p); return; }
   const c = sel.comodo && comodo(sel.comodo);
   if (!c) { p.classList.remove('aberto'); p.innerHTML = ''; return; }
@@ -834,13 +836,13 @@ $('#btnComodos').onclick = () => {
 
 // ---------- modos ----------
 function definirModo(m) {
-  modo = m; if (m === 'desenhar') sel = { comodo: null, parede: null };
+  modo = m; if (m === 'desenhar' || m === 'ver') sel = { comodo: null, parede: null }; if (m === 'ver') selPonto = null;
   document.querySelectorAll('.barra .modo').forEach(b => b.classList.toggle('ativo', b.dataset.modo === m));
   $('#painel').dataset.tipo = '';
   render();
 }
 document.querySelectorAll('.barra .modo').forEach(b => b.onclick = () => {
-  const ir = () => { if (b.dataset.modo !== 'desenhar') rascunho = []; definirModo(b.dataset.modo); };
+  const ir = () => { if (b.dataset.modo !== 'desenhar') rascunho = []; definirModo(modo === b.dataset.modo ? 'ver' : b.dataset.modo); }; // v40: tocar de novo no modo ativo fecha (modo livre)
   if (modo === 'desenhar' && b.dataset.modo !== 'desenhar' && rascunho.length) confirmar('Descartar o cômodo em desenho?', ir, 'Descartar'); else ir();
 });
 function garantirVisivel(w) {
@@ -984,6 +986,7 @@ function paredeEm(s) {
 
 function toque(s) {
   const w = mundo(s);
+  if (modo === 'ver') return;
   if (modo === 'pontos') { colocarPonto(w); return; }
   if (modo === 'desenhar') {
     if (rascunho.length >= 3 && dist(tela(rascunho[0]), s) < TOL_PX + 6) { fecharRascunho(); return; }
@@ -1442,7 +1445,7 @@ const TUTO = [
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
   ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>, a <b>🧾 Lista de materiais</b> e o <b>📄 Relatório PDF</b> com tudo junto.'],
   ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas, e o <b>🎓 Treinar</b> faz perguntas com o seu próprio projeto.'],
-  ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
+  ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel, e tocar de novo no modo ativo (Selecionar, Desenhar, Pontos) fecha tudo e deixa a planta livre. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
   ['⚠️', 'Importante', 'O EletroMaster é ferramenta de apoio. Projeto oficial precisa de profissional habilitado e ART. Bom trabalho!']
 ];
 function tutorial(i = 0) {
@@ -1456,7 +1459,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=39').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=40').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
