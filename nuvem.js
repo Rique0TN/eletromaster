@@ -21,10 +21,14 @@
       const av = (t) => foto ? `<img class="avatar${t}" src="${foto}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;avatar${t} avatar-ini&quot;>${ini}</span>'">` : `<span class="avatar${t} avatar-ini">${ini}</span>`;
       a.innerHTML = `<button class="conta-btn" id="btnConta" title="${limpa(status)}" aria-label="Minha conta">${av('')}</button>`;
       el('btnConta').onclick = () => {
-        abrirModal(`<div style="text-align:center">${av(' avatar-g')}<h2 style="margin:10px 0 2px">${nomeT}</h2><div style="font-size:14px;opacity:.7">${limpa(usuario.email)}</div>
+        abrirModal(`<div style="text-align:center">${av(' avatar-g')}<h2 style="margin:10px 0 2px">${nomeT}</h2><button class="btn peq" id="cNome" style="margin:6px 0">✏️ Mudar nome</button><div style="font-size:14px;opacity:.7">${limpa(usuario.email)}</div>
           <div style="font-size:13px;margin:12px 0;opacity:.85">☁️ Projetos salvos na sua conta Google e neste aparelho.</div></div>
           <div style="display:flex;gap:8px"><button class="btn" id="cFechar" style="flex:1">Fechar</button><button class="btn perigo" id="btnSair" style="flex:1">Sair da conta</button></div>`);
         el('cFechar').onclick = fecharModal;
+        el('cNome').onclick = () => pedirTexto('Como você quer ser chamado?', usuario.displayName || '', v => {
+          v = v.trim().slice(0, 40); if (!v) return;
+          usuario.updateProfile({ displayName: v }).then(() => { renderConta(); aviso('Nome atualizado'); }).catch(() => aviso('Não deu pra mudar o nome agora.'));
+        });
         el('btnSair').onclick = () => confirmar('Sair da conta? Os projetos continuam neste aparelho.', () => auth.signOut(), 'Sair');
       };
       const s = el('saudacao'); if (s) { s.hidden = false; s.innerHTML = `${av(' avatar-m')}<div><div style="font-weight:700">Olá, ${nome}!</div><div style="font-size:13px;opacity:.7">Seus projetos estão salvos na nuvem.</div></div>`; }

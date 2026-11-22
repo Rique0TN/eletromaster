@@ -177,7 +177,7 @@ function abrirProjeto(id) {
   $('#nomeProjeto').textContent = proj.nome;
   mostrarTela('telaEditor');
   definirModo(proj.comodos.length ? 'selecionar' : 'desenhar');
-  requestAnimationFrame(() => { enquadrar(); render(); });
+  requestAnimationFrame(() => { enquadrar(); render(); if (!banco.tutorialVisto && !document.getElementById('lobby')) tutorial(0); });
 }
 $('#btnVoltar').onclick = () => { const sair = () => { rascunho = []; proj = null; mostrarTela('telaProjetos'); renderLista(); }; rascunho.length ? confirmar('Descartar o cômodo que está sendo desenhado?', sair, 'Descartar') : sair(); };
 $('#nomeProjeto').onclick = () => pedirTexto('Renomear projeto', proj.nome, n => { proj.nome = n; gravar(); $('#nomeProjeto').textContent = n; });
@@ -1124,7 +1124,31 @@ function livroNormas() {
   abrirModal(h); $('#lnOk').onclick = fecharModal;
 }
 $('#btnNormas').onclick = livroNormas;
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=30').catch(() => {});
+// v31: tutorial de como usar (passo a passo); abre na 1ª vez que entra no editor e pelo botão 🎓
+const TUTO = [
+  ['⚡', 'Bem-vindo ao EletroMaster', 'Você desenha a planta da casa e o app calcula luz, tomadas, circuitos, fios e disjuntores pela NBR 5410, explicando o porquê de cada valor.'],
+  ['📁', '1. Crie um projeto', 'Na tela inicial, toque em <b>+ Novo projeto</b> e dê um nome. Tudo fica salvo sozinho no aparelho e, se entrou com Google, na nuvem.'],
+  ['✎', '2. Desenhe os cômodos', 'Use <b>▭ Retângulo</b> pra um cômodo pronto, ou <b>✎ Desenhar</b> e arraste o dedo parede por parede. Feche no ponto verde. Dá pra digitar a medida de cada parede.'],
+  ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta. Arraste os cantos pra mexer.'],
+  ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas.'],
+  ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
+  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR) e <b>📋 Quadro de cargas</b>.'],
+  ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas.'],
+  ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
+  ['⚠️', 'Importante', 'O EletroMaster é ferramenta de apoio. Projeto oficial precisa de profissional habilitado e ART. Bom trabalho!']
+];
+function tutorial(i = 0) {
+  const [ic, t, d] = TUTO[i], ult = i === TUTO.length - 1;
+  abrirModal(`<div style="text-align:center;font-size:42px">${ic}</div><h2 style="text-align:center">${t}</h2><div style="font-size:15px;line-height:1.5">${d}</div>
+    <div style="text-align:center;margin:14px 0;font-size:12px;opacity:.6">${i + 1} de ${TUTO.length}</div>
+    <div style="display:flex;gap:8px"><button class="btn" id="tuPular">${ult ? 'Fechar' : 'Pular'}</button>${i ? '<button class="btn" id="tuVoltar">‹ Voltar</button>' : ''}<button class="btn primario" id="tuProx" style="margin-left:auto">${ult ? 'Começar' : 'Próximo ›'}</button></div>`);
+  const fim = () => { banco.tutorialVisto = true; salvar(); fecharModal(); };
+  $('#tuPular').onclick = fim;
+  if (i) $('#tuVoltar').onclick = () => tutorial(i - 1);
+  $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
+}
+$('#btnTutorial').onclick = () => tutorial(0);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=31').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
