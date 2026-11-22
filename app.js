@@ -222,8 +222,22 @@ function enquadrar() {
   vista.oy = r.height / 2 - (miny + h / 2) * vista.esc;
 }
 $('#btnCentralizar').onclick = () => { enquadrar(); render(); };
-function marcarCotas() { const b = $('#btnCotas'); b.style.opacity = banco.ocultarCotas ? .45 : 1; b.style.textDecoration = banco.ocultarCotas ? 'line-through' : 'none'; }
-$('#btnCotas').onclick = () => { banco.ocultarCotas = !banco.ocultarCotas; salvar(); marcarCotas(); render(); aviso(banco.ocultarCotas ? 'Medidas ocultas (a parede selecionada ainda mostra a sua)' : 'Medidas visíveis'); };
+// v29: camadas da planta (mostrar/ocultar cada tipo de marcação)
+const CAMADAS = [['cotas', '📏 Medidas das paredes'], ['nomes', '🏷️ Nome e área dos cômodos'], ['cargas', '💡 Cargas (luz, TUG, TUE)'], ['pontos', '🔌 Tomadas, interruptores e quadro'], ['portas', '🚪 Portas']];
+function cam(k) { if (!banco.camadas) banco.camadas = { cotas: !banco.ocultarCotas }; return banco.camadas[k] !== false; }
+function marcarCotas() { const b = $('#btnCotas'), oc = CAMADAS.filter(([k]) => !cam(k)).length; b.style.opacity = oc ? .6 : 1; b.textContent = oc ? '👁' + oc : '👁'; }
+function abrirCamadas() {
+  abrirModal(`<h2>👁 O que mostrar na planta</h2>
+    ${CAMADAS.map(([k, n]) => `<label style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--linha)"><span>${n}</span><input type="checkbox" data-cam="${k}" ${cam(k) ? 'checked' : ''} style="width:24px;height:24px"></label>`).join('')}
+    <div style="margin:10px 0;font-size:13px;opacity:.75">A parede selecionada sempre mostra a medida, e no modo 🔌 Pontos as tomadas aparecem mesmo ocultas, pra você poder editar.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="camTodos">Mostrar tudo</button><button class="btn" id="camNada">Ocultar tudo</button><button class="btn primario" id="camOk" style="margin-left:auto">Pronto</button></div>`);
+  const set = (k, v) => { cam(k); banco.camadas[k] = v; banco.ocultarCotas = !cam('cotas'); salvar(); marcarCotas(); render(); };
+  document.querySelectorAll('[data-cam]').forEach(i => i.onchange = () => set(i.dataset.cam, i.checked));
+  $('#camTodos').onclick = () => { CAMADAS.forEach(([k]) => set(k, true)); abrirCamadas(); };
+  $('#camNada').onclick = () => { CAMADAS.forEach(([k]) => set(k, false)); abrirCamadas(); };
+  $('#camOk').onclick = fecharModal;
+}
+$('#btnCotas').onclick = abrirCamadas;
 marcarCotas();
 window.addEventListener('resize', () => proj && render());
 function zoomEm(sx, sy, fator) {
@@ -316,8 +330,8 @@ function render() {
     h += `<polygon points="${d}" fill="${cor}" fill-opacity="${s ? .22 : .12}" stroke="#e8eef7" stroke-width="${s ? 4 : 3}" stroke-linejoin="round"/>`;
   });
   { const c = sel.comodo && comodo(sel.comodo); if (c && sel.parede != null) { const A = tela(c.pts[sel.parede]), B = tela(c.pts[(sel.parede + 1) % c.pts.length]); h += `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="#ffc531" stroke-width="6" stroke-linecap="round"/>`; } }
-  proj.comodos.forEach(c => (c.portas || []).forEach(pt => h += svgPorta(c, pt, c.id === sel.comodo && sel.parede === pt.parede)));
-  proj.comodos.forEach(c => (c.pontos || []).forEach(q => h += svgPonto(c, q, modo === 'pontos' && selPonto === q.id)));
+  if (cam('portas')) proj.comodos.forEach(c => (c.portas || []).forEach(pt => h += svgPorta(c, pt, c.id === sel.comodo && sel.parede === pt.parede)));
+  if (cam('pontos') || modo === 'pontos') proj.comodos.forEach(c => (c.pontos || []).forEach(q => h += svgPonto(c, q, modo === 'pontos' && selPonto === q.id)));
   proj.comodos.forEach(c => {
     const s = c.id === sel.comodo;
     // cotas das paredes: sempre na horizontal (fácil de ler) e um pouco pra dentro do cômodo
@@ -327,18 +341,18 @@ function render() {
       const A = tela(a), B = tela(b), mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2;
       if (Math.hypot(B[0] - A[0], B[1] - A[1]) < 52) return;
       const ps = s && sel.parede === i;
-      if (banco.ocultarCotas && !ps) return;
+      if (!cam('cotas') && !ps) return;
       const Ls = Math.hypot(B[0] - A[0], B[1] - A[1]); let nx = -(B[1] - A[1]) / Ls, ny = (B[0] - A[0]) / Ls;
       if (nx * (ctc[0] - mx) + ny * (ctc[1] - my) < 0) { nx = -nx; ny = -ny; }
       const off = Math.abs(nx) > Math.abs(ny) ? 34 : 18, lx = mx + nx * off, ly = my + ny * off;
       h += `<g transform="translate(${lx.toFixed(1)},${ly.toFixed(1)})"><rect x="-27" y="-11" width="54" height="21" rx="6" fill="#0d1626" fill-opacity=".9"/>
         <text y="4.5" text-anchor="middle" font-size="14" font-weight="700" fill="${ps ? '#ffc531' : '#cfe0f5'}">${fmt(L)}</text></g>`;
     });
-    // nome + área
+    // nome + área / cargas (camadas)
     const ct = tela(centroide(c.pts));
-    h += `<text x="${ct[0]}" y="${ct[1] - 4}" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">${esc(c.nome)}</text>
-      <text x="${ct[0]}" y="${ct[1] + 13}" text-anchor="middle" font-size="12" fill="#ffc531">${fmt(area(c.pts))} m²</text>
-      <text x="${ct[0]}" y="${ct[1] + 28}" text-anchor="middle" font-size="11" fill="#7ee0a0">🔌 ${tug(c).min}–${tug(c).max} TUG${(c.tue || []).length ? ` · ⚡ ${c.tue.length} TUE` : ''}</text>
+    if (cam('nomes')) h += `<text x="${ct[0]}" y="${ct[1] - 4}" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">${esc(c.nome)}</text>
+      <text x="${ct[0]}" y="${ct[1] + 13}" text-anchor="middle" font-size="12" fill="#ffc531">${fmt(area(c.pts))} m²</text>`;
+    if (cam('cargas')) h += `<text x="${ct[0]}" y="${ct[1] + 28}" text-anchor="middle" font-size="11" fill="#7ee0a0">🔌 ${tug(c).min}–${tug(c).max} TUG${(c.tue || []).length ? ` · ⚡ ${c.tue.length} TUE` : ''}</text>
       <g transform="translate(${ct[0]},${ct[1] - 34})"><circle r="9" fill="#0d1626" stroke="#ffd84a" stroke-width="2"/><path d="M-6,-6L6,6M6,-6L-6,6" stroke="#ffd84a" stroke-width="2"/>
       <text x="13" y="4" font-size="11" fill="#ffd84a">${iluminacao(c.pts).va} VA</text></g>`;
     if (s && modo === 'selecionar') c.pts.forEach(p => { const P = tela(p); h += `<circle cx="${P[0]}" cy="${P[1]}" r="7" fill="#3b9cff" stroke="#fff" stroke-width="2"/>`; });
@@ -1078,7 +1092,39 @@ function legendaPontos() {
 
 // ---------- início ----------
 renderLista();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=28').catch(() => {});
+// v29: Livro de normas — mostra quais normas o app está aplicando neste projeto agora
+function livroNormas() {
+  const cs = proj ? proj.comodos : [], tem = cs.length > 0;
+  const pontos = cs.flatMap(c => c.pontos || []), qdc = pontos.some(q => q.k === 'qdc');
+  const tomCol = pontos.some(q => q.k === 'tom'), ints = pontos.some(q => q.k === 'int' || q.k === 'par');
+  const nTue = cs.reduce((s, c) => s + (c.tue || []).length, 0), molh = cs.filter(c => DR_TIPOS.includes(c.tipo));
+  const it = (uso, titulo, oque, onde) => `<div style="padding:10px 0;border-bottom:1px solid var(--linha)"><div><b>${uso ? '✅' : '⚪'} ${titulo}</b></div><div style="font-size:14px;margin-top:3px">${oque}</div><div style="font-size:12px;opacity:.65;margin-top:3px">${uso ? 'Em uso agora · ' : 'Ainda não usado neste projeto · '}${onde}</div></div>`;
+  const sec = (t, d, h) => `<h3 style="margin:16px 0 4px;font-size:16px">${t}</h3><div style="font-size:12px;opacity:.7">${d}</div>${h}`;
+  let h = `<h2>📘 Livro de normas</h2><div style="font-size:13px;opacity:.8">O que o app está aplicando neste projeto (${esc(proj ? proj.nome : '')}), em ${tensao()} V. ✅ = sendo usado agora.</div>`;
+  h += sec('ABNT NBR 5410 · Instalações elétricas de baixa tensão', 'A norma principal. O app aplica as regras com palavras próprias; o texto oficial é da ABNT.',
+    it(tem, 'Iluminação mínima', '1 ponto de luz no teto por cômodo, com interruptor. 100 VA até 6 m² e +60 VA a cada 4 m² inteiros.', `${cs.length} cômodo(s) · painel do cômodo e ❓`) +
+    it(tem, 'Tomadas de uso geral (TUG)', 'Quantidade mínima pelo tipo e tamanho do cômodo (perímetro ou área) e potência: 600 VA nas 3 primeiras de áreas molhadas, 100 VA nas demais.', 'painel do cômodo, tabela e ❓') +
+    it(nTue > 0, 'Tomadas de uso específico (TUE)', 'Potência do aparelho (VA = W ÷ fator de potência), com circuito próprio.', `${nTue} aparelho(s)`) +
+    it(tem, 'Divisão em circuitos', 'Luz separada de tomadas; tomadas de cozinha, copa e área de serviço em circuitos só delas; cada TUE com o seu.', '🔀 Circuitos') +
+    it(tem, 'Fio e disjuntor (Ib ≤ In ≤ Iz)', `Corrente do circuito ≤ disjuntor ≤ o que o fio aguenta (cobre, PVC, método B1, 30 °C), com fator de agrupamento de ${fmt(fca(), 2)} (${agrup()} circuito(s) no eletroduto).`, '🔀 Circuitos') +
+    it(tem, 'Seção mínima dos fios', '1,5 mm² para iluminação e 2,5 mm² para tomadas.', '🔀 Circuitos') +
+    it(qdc, 'Queda de tensão', 'Até 4% do quadro ao ponto mais longe; se passar, o app aumenta o fio.', qdc ? '🔀 Circuitos (Dist. e Queda)' : 'coloque o ▣ Quadro na planta') +
+    it(molh.length > 0, 'DR 30 mA', 'Proteção diferencial nos circuitos de áreas molhadas e externas (banheiro, cozinha, área de serviço, varanda, garagem...).', molh.length ? molh.map(c => esc(c.nome)).join(', ') : 'nenhum cômodo molhado ainda') +
+    it(tem, 'DPS', `Protetor de surto no quadro: classe II, In ≥ 20 kA, Uc ${tensao() === 220 ? 275 : 175} V.`, '📋 Quadro de cargas') +
+    it(tem, 'Espaço reserva no quadro', 'Até 6 circuitos: 2 · 7 a 12: 3 · 13 a 30: 4 · mais de 30: 15%.', '📋 Quadro de cargas') +
+    it(ints || tomCol, 'Cores dos condutores', 'Neutro azul-claro, proteção (terra) verde-amarelo ou verde. Fase e retorno em outras cores.', 'Legenda dos pontos'));
+  h += sec('Neoenergia Coelba · DIS-NOR-030', 'Norma da distribuidora da Bahia para fornecimento em baixa tensão.',
+    it(tem, 'Fator de demanda (luz e tomadas)', 'Tabela 6 por faixa de potência instalada, para achar a demanda da casa e o disjuntor geral.', '📊 Demanda e 📋 Quadro') +
+    it(false, 'Padrão de entrada e demanda por tipo de aparelho', 'Chuveiros, ar-condicionado, fornos etc. agrupados como a Coelba pede.', 'em breve (módulo 18)'));
+  h += sec('Simbologia (NBR 5444)', 'Cancelada em 2014, mas ainda é o padrão usado no mercado.',
+    it(tomCol || ints || qdc, 'Símbolos de tomadas, interruptores e quadro', 'Tomada baixa, média e alta; interruptor simples e paralelo; quadro de distribuição.', 'modo 🔌 Pontos · Legenda'));
+  h += sec('NR-10 · Segurança em eletricidade', 'Norma do Ministério do Trabalho.',
+    it(true, 'Aviso de segurança', 'O EletroMaster é ferramenta de apoio. Execução e projeto oficial exigem profissional habilitado, ART e serviço com o circuito desenergizado.', 'sempre'));
+  h += `<div style="font-size:12px;opacity:.6;margin:12px 0">Confira sempre a versão vigente das normas. Projeto oficial precisa de responsável técnico.</div><button class="btn primario" id="lnOk" style="width:100%">Fechar</button>`;
+  abrirModal(h); $('#lnOk').onclick = fecharModal;
+}
+$('#btnNormas').onclick = livroNormas;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=29').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
