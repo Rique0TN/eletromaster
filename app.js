@@ -655,13 +655,13 @@ function resumoItens(its) { const m = new Map(); its.forEach(i => m.set(i.nome, 
 function circuitos() {
   const Q = qdcPos(), V = tensao(), limL = maiorDisj(1.5) * V, limT = maiorDisj(2.5) * V, lim = limT, cs = proj.comodos, out = [];
   const luz = cs.map(c => ({ nome: c.nome, dr: drComodo(c, true), va: iluminacao(c.pts).va, n: 1, d: distQdc(centroide(c.pts), Q, peDireito(c), peDireito(c)) }));
-  agrupar(luz, limL).forEach(g => out.push({ tipo: 'Iluminação', desc: resumoItens(g.itens), va: g.va, L: g.L, dr: g.itens.some(i => i.dr) }));
+  agrupar(luz, limL).forEach(g => out.push({ tipo: 'Iluminação', desc: resumoItens(g.itens), va: g.va, L: g.L, np: g.itens.length, dr: g.itens.some(i => i.dr) }));
   const tomadas = grupo => cs.filter(grupo).flatMap(c => { const t = tug(c), arr = [], tom = (c.pontos || []).filter(q => q.k === 'tom').map(q => ({ g: geoPonto(c, q), h: ALT_M[q.alt] ?? 0.3 })).filter(x => x.g);
     const sl = tomSlots(c, t.n);
     for (let k = 1; k <= t.n; k++) { const tk = tom[k - 1]; arr.push({ nome: c.nome, dr: drComodo(c), va: sl[k - 1].va, n: 1, d: distQdc(tk ? tk.g.m : centroide(c.pts), Q, peDireito(c), tk ? tk.h : 0.3) }); } return arr; });
-  agrupar(tomadas(c => !MOLH_CIRC.includes(c.tipo)), lim).forEach(g => out.push({ tipo: 'TUG', desc: resumoItens(g.itens), va: g.va, L: g.L, dr: g.itens.some(i => i.dr) }));
-  agrupar(tomadas(c => MOLH_CIRC.includes(c.tipo)), lim).forEach(g => out.push({ tipo: 'TUG (cozinha/serviço)', desc: resumoItens(g.itens), va: g.va, L: g.L, dr: true }));
-  cs.forEach(c => (c.tue || []).forEach(u => out.push({ tipo: 'TUE', desc: `${esc(u.nome)} (${esc(c.nome)})`, va: tueVA(u), exclusivo: tueA(u) > 10, dr: drComodo(c), L: distQdc(centroide(c.pts), Q, peDireito(c), 1.3) })));
+  agrupar(tomadas(c => !MOLH_CIRC.includes(c.tipo)), lim).forEach(g => out.push({ tipo: 'TUG', desc: resumoItens(g.itens), va: g.va, L: g.L, np: g.itens.length, dr: g.itens.some(i => i.dr) }));
+  agrupar(tomadas(c => MOLH_CIRC.includes(c.tipo)), lim).forEach(g => out.push({ tipo: 'TUG (cozinha/serviço)', desc: resumoItens(g.itens), va: g.va, L: g.L, np: g.itens.length, dr: true }));
+  cs.forEach(c => (c.tue || []).forEach(u => out.push({ tipo: 'TUE', np: 1, desc: `${esc(u.nome)} (${esc(c.nome)})`, va: tueVA(u), exclusivo: tueA(u) > 10, dr: drComodo(c), L: distQdc(centroide(c.pts), Q, peDireito(c), 1.3) })));
   out.forEach((c, i) => { c.n = i + 1; c.i = c.va / V; Object.assign(c, dimensionar(c)); });
   return { lista: out, V, lim, limL, limT, Q };
 }
@@ -709,8 +709,8 @@ function mostrarQuadro() {
     ${bloco('4️⃣ DR e DPS no quadro', ['O DR pode proteger um circuito sozinho ou um grupo de circuitos.', 'O DPS fica logo depois do disjuntor geral, ligado ao terra.'],
       [`${nDr} circuito(s) precisam de DR 30 mA. Opção simples: um DR geral de 30 mA com corrente ≥ ${g.inn} A, ou um DR para o grupo das áreas molhadas.`, `DPS sugerido: classe II, Uc ≥ ${dpsUc()} V (valores usuais de mercado, confirmar no projeto).`])}
     <p class="aviso">Regras da NBR 5410 explicadas com nossas palavras. A demanda e o disjuntor geral devem ser conferidos com a norma de fornecimento da Neoenergia Coelba. Ferramenta de apoio: o projeto oficial precisa de profissional habilitado e ART.</p>
-    <div class="botoes"><button class="btn" id="mVolta">← Cômodos</button><button class="btn" id="mCirc2">🔀 Circuitos</button><button class="btn primario" id="mUnif">⚡ Unifilar</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mVolta').onclick = () => $('#btnComodos').onclick(); $('#mCirc2').onclick = mostrarCircuitos; $('#mUnif').onclick = mostrarUnifilar;
+    <div class="botoes"><button class="btn" id="mVolta">← Cômodos</button><button class="btn" id="mCirc2">🔀 Circuitos</button><button class="btn primario" id="mUnif">⚡ Unifilar</button><button class="btn" id="mMat2">🧾 Materiais</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mVolta').onclick = () => $('#btnComodos').onclick(); $('#mCirc2').onclick = mostrarCircuitos; $('#mUnif').onclick = mostrarUnifilar; $('#mMat2').onclick = mostrarMateriais;
 }
 // ---------- explicação: o que a norma diz + como foi aplicado ----------
 function regraTUG(tipo) {
@@ -826,8 +826,8 @@ $('#btnComodos').onclick = () => {
     <table><tr><th>Nome</th><th>Tipo</th><th class="n">Área (m²)</th><th class="n">Perím. (m)</th><th class="n">Luz (VA)</th><th class="n">TUG</th><th class="n">TUG (VA)</th><th class="n">TUE (VA)</th></tr>${linhas}
     <tr class="total"><td>Total</td><td>${proj.comodos.length} cômodo(s)</td><td class="n">${fmt(ta)}</td><td class="n">—</td><td class="n">${tv}</td><td class="n">${tn}</td><td class="n">${tt}</td><td class="n">${te}</td></tr></table>
     <p class="aviso" style="margin-top:10px">Luz: mínimo pela NBR 5410 (1 ponto no teto por cômodo; 100 VA até 6 m², +60 VA a cada 4 m² inteiros). TUG: mínimo da NBR 5410 – máximo recomendado pelo app; VA calculado com o mínimo (600 VA nas 3 primeiras de cozinha, copa, área de serviço e banheiro; 100 VA nas demais). TUE: potência do aparelho; acima de 10 A na tensão do projeto (${tensao()} V), circuito exclusivo. Ferramenta de apoio: confira com profissional habilitado.</p>
-    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
+    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
   $('#modalConteudo').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { fecharModal(); definirModo('selecionar'); sel = { comodo: tr.dataset.id, parede: null }; render(); });
 };
 
@@ -1181,6 +1181,67 @@ function mostrarUnifilar() {
     <div class="botoes"><button class="btn" id="mQd">📋 Quadro de cargas</button><button class="btn" id="mCanc">Fechar</button></div>`);
   $('#mCanc').onclick = fecharModal; $('#mQd').onclick = mostrarQuadro;
 }
+// v35: módulo 12 — lista de materiais (estimativa)
+const L_SEM_QDC = 10, EXTRA_PONTO = 2, SOBRA = 1.1, RET_INT = 3;
+function materiais() {
+  const { lista, Q } = circuitos(), g = geral(), al = alimentador(), res = reservaQd(lista.length), cs = proj.comodos;
+  const fios = {};
+  const add = (sec, cor, m) => { const k = `${sec}|${cor}`; fios[k] = (fios[k] || 0) + m; };
+  const rotas = [];
+  lista.forEach(c => {
+    const L = c.L != null ? c.L : L_SEM_QDC, rota = L + Math.max(0, (c.np || 1) - 1) * EXTRA_PONTO; rotas.push(rota);
+    add(c.sec, 'Fase (preto ou vermelho)', rota); add(c.sec, 'Neutro (azul-claro)', rota); add(c.sec, 'Terra (verde-amarelo)', rota);
+  });
+  const nInt = cs.reduce((s, c) => s + (c.pontos || []).filter(q => q.k === 'int' || q.k === 'par').length, 0), nPar = cs.reduce((s, c) => s + (c.pontos || []).filter(q => q.k === 'par').length, 0);
+  const nRet = Math.max(nInt, cs.length); add(1.5, 'Retorno (amarelo, branco ou cinza)', nRet * RET_INT + nPar * RET_INT);
+  if (al) ['Fase (preto ou vermelho)', 'Neutro (azul-claro)', 'Terra (verde-amarelo)'].forEach(cor => add(al.sec, cor + ' · alimentador', al.L));
+  const tom = cs.flatMap(c => (c.pontos || []).filter(q => q.k === 'tom')), falta = cs.reduce((s, c) => s + Math.max(0, tug(c).min - tug(c).col), 0);
+  const cnt = f => tom.filter(f).length;
+  const disj = {}; lista.forEach(c => disj[c.inn] = (disj[c.inn] || 0) + 1);
+  const comDR = lista.filter(c => c.dr), drA = comDR.length ? (Math.max(...comDR.map(c => c.inn)) < 25 ? 25 : 40) : 0;
+  const nTue = lista.filter(c => c.tipo === 'TUE').length;
+  const posicoes = lista.length + res + 1 + (comDR.length ? 2 : 0) + 2;
+  const linhas = [], sec = s => fmt(s, 1).replace(',0', '');
+  Object.entries(fios).sort().forEach(([k, m]) => { const [s, cor] = k.split('|'), mm = Math.ceil(m * SOBRA); linhas.push(['Fios e cabos', `Cabo flexível ${sec(+s)} mm² · ${cor}`, `${mm} m`, mm > 60 ? `${Math.ceil(mm / 100)} rolo(s) de 100 m` : 'comprar a metro']); });
+  linhas.push(['Quadro', 'Quadro de distribuição (QDC) com trilho DIN', '1', `pelo menos ${posicoes} posições`]);
+  linhas.push(['Quadro', `Disjuntor geral ${g.inn} A (curva C)`, '1', `pela demanda (${fmt(g.ib, 1)} A)`]);
+  Object.keys(disj).map(Number).sort((x, y) => x - y).forEach(i => linhas.push(['Quadro', `Disjuntor ${i} A (curva C)`, `${disj[i]}`, 'circuitos']));
+  if (comDR.length) linhas.push(['Quadro', `DR 30 mA, ${drA} A, bipolar`, '1', `${comDR.length} circuito(s) de áreas molhadas`]);
+  linhas.push(['Quadro', `DPS classe II, ${dpsUc()} V, 20 kA`, '2', 'fase e neutro']);
+  linhas.push(['Quadro', 'Barramentos de neutro e de terra', '1 de cada', '']);
+  linhas.push(['Pontos', 'Tomada 2P+T 10 A simples', `${cnt(q => !q.dupla) + falta}`, falta ? `inclui ${falta} ainda não colocada(s) na planta` : '']);
+  if (cnt(q => q.dupla)) linhas.push(['Pontos', 'Tomada 2P+T 10 A dupla', `${cnt(q => q.dupla)}`, '']);
+  if (nTue) linhas.push(['Pontos', 'Tomada 2P+T 20 A ou conector (TUE)', `${nTue}`, 'chuveiro: ligação direta com conector']);
+  if (nInt - nPar) linhas.push(['Pontos', 'Interruptor simples', `${nInt - nPar}`, '']);
+  if (nPar) linhas.push(['Pontos', 'Interruptor paralelo (three-way)', `${nPar}`, 'sempre em par']);
+  if (nInt < cs.length) linhas.push(['Pontos', 'Interruptor simples (a posicionar)', `${cs.length - nInt}`, '1 por cômodo sem interruptor na planta']);
+  linhas.push(['Pontos', 'Ponto de luz (plafon/lâmpada LED)', `${cs.length}`, '1 por cômodo']);
+  linhas.push(['Caixas', 'Caixa 4x2 (tomadas e interruptores)', `${tom.length + falta + nTue + Math.max(nInt, cs.length)}`, '']);
+  linhas.push(['Caixas', 'Caixa octogonal 4x4 (teto)', `${cs.length}`, '']);
+  const eletr = Math.ceil(rotas.reduce((s, r) => s + r, 0) * 0.6 * SOBRA);
+  linhas.push(['Eletroduto', 'Eletroduto corrugado 20 mm (3/4")', `${eletr} m`, 'estimativa: circuitos dividem trechos']);
+  if (al) linhas.push(['Eletroduto', 'Eletroduto 25 mm ou mais (alimentador)', `${Math.ceil(al.L * SOBRA)} m`, 'medidor → quadro']);
+  linhas.push(['Outros', 'Fita isolante, conectores de emenda, buchas e parafusos', '—', 'a gosto do eletricista']);
+  return { linhas, semQdc: !Q };
+}
+function mostrarMateriais() {
+  if (!proj.comodos.length) return aviso('Desenhe os cômodos primeiro.');
+  const m = materiais(); let grupo = '', rows = '';
+  m.linhas.forEach(([gr, it, q, ob]) => { if (gr !== grupo) { grupo = gr; rows += `<tr class="total"><td colspan="2">${gr}</td></tr>`; } rows += `<tr><td>${esc(it)}${ob ? `<div style="font-size:11px;opacity:.65">${esc(ob)}</div>` : ''}</td><td class="n"><b>${esc(q)}</b></td></tr>`; });
+  const ls = arr => `<ul class="passos">${arr.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  abrirModal(`<h2>🧾 Lista de materiais · ${esc(proj.nome)}</h2>
+    ${m.semQdc ? '<div class="exp-aplic" style="margin-bottom:8px">⚠️ Sem o ▣ Quadro na planta, cada circuito foi estimado com 10 m. Coloque o quadro (modo 🔌 Pontos) pra medir de verdade.</div>' : ''}
+    <table><tr><th>Item</th><th class="n">Qtd.</th></tr>${rows}</table>
+    <div class="exp-norma" style="margin-top:10px"><b>🧮 Como o app estimou</b>${ls([`Fios: cada circuito leva fase, neutro e terra do quadro até o ponto mais longe + ${EXTRA_PONTO} m por ponto a mais, com a seção calculada em 🔀 Circuitos.`, `Retorno: ${RET_INT} m por interruptor (do interruptor até a luz), e mais ${RET_INT} m nos paralelos.`, 'Cores: neutro azul-claro e terra verde-amarelo (ou verde) são as da NBR 5410; fase e retorno podem ser outras cores, desde que não sejam essas.', `Tudo com ${Math.round((SOBRA - 1) * 100)}% de sobra pra emendas e perdas. Eletroduto ≈ 60% da soma dos caminhos, porque os circuitos dividem trechos perto do quadro.`])}</div>
+    <p class="aviso">Estimativa pra orçamento. Confira na obra antes de comprar.</p>
+    <div class="botoes"><button class="btn primario" id="mCopiar">📋 Copiar lista</button><button class="btn" id="mQd2">📋 Quadro</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mQd2').onclick = mostrarQuadro;
+  $('#mCopiar').onclick = () => {
+    const txt = `Lista de materiais · ${proj.nome} (EletroMaster)\n` + m.linhas.map(([gr, it, q, ob]) => `• ${it}: ${q}${ob ? ` (${ob})` : ''}`).join('\n');
+    const velho = () => { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); aviso('Lista copiada.'); } catch { aviso('Não deu pra copiar.'); } t.remove(); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => aviso('Lista copiada. Cole no WhatsApp ou nas notas.')).catch(velho); else velho();
+  };
+}
 function legendaPontos() {
   const cor = '#e8eef7';
   const tri = alt => `<svg width="40" height="34"><polygon points="20,4 4,30 36,30" fill="${alt === 'al' ? cor : '#0d1626'}" stroke="${cor}" stroke-width="2"/>${alt === 'md' ? `<polygon points="20,4 4,30 20,30" fill="${cor}"/>` : ''}</svg>`;
@@ -1238,7 +1299,7 @@ const TUTO = [
   ['☝', '3. Ajuste e dê o tipo', 'Em <b>☝ Selecionar</b>, toque no cômodo pra escolher o tipo (sala, cozinha, banheiro...) e o pé-direito. Toque numa parede pra mudar a medida ou pôr porta. Arraste os cantos pra mexer.'],
   ['🔌', '4. Coloque os pontos', 'No modo <b>🔌 Pontos</b>, escolha tomada (baixa, média, alta, dupla), interruptor ou <b>▣ Quadro</b> e toque perto da parede. O app avisa se faltam tomadas.'],
   ['⚡', '5. Aparelhos (TUE)', 'No painel do cômodo, toque em <b>+ TUE</b> pra chuveiro, ar-condicionado, forno... Cada um ganha circuito próprio. O botão <b>🔁 220 V</b> troca a tensão da casa.'],
-  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b>.'],
+  ['📊', '6. Veja os cálculos', 'Em <b>☰ Cômodos</b> você abre <b>📊 Demanda</b>, <b>🔀 Circuitos</b> (fio, disjuntor, queda de tensão, DR), <b>📋 Quadro de cargas</b> e, dentro dele, o <b>⚡ Unifilar</b> e a <b>🧾 Lista de materiais</b>.'],
   ['❓', '7. Entenda o porquê', 'O botão <b>❓ Por que esses valores?</b> mostra o que a norma diz e a conta passo a passo. O <b>📘 Livro de normas</b> no topo mostra quais regras estão sendo usadas.'],
   ['👁', '8. Deixe a tela limpa', 'O <b>👁</b> esconde medidas, nomes, cargas, tomadas ou portas. <b>▾ Ocultar</b> recolhe o painel. <b>⤢</b> centraliza a planta, <b>↶ ↷</b> desfazem, <b>📝</b> guarda notas e <b>‹</b> volta pros projetos.'],
   ['⚠️', 'Importante', 'O EletroMaster é ferramenta de apoio. Projeto oficial precisa de profissional habilitado e ART. Bom trabalho!']
@@ -1254,7 +1315,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=34').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=35').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
