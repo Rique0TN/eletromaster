@@ -211,6 +211,23 @@ function abrirCompartilhar() {
 }
 $('#btnCompart').onclick = abrirCompartilhar;
 
+// ---------- v47: módulo 17 checklist de inspeção e testes (NBR 5410, seção 7: verificação final) ----------
+const INSPECAO = [
+  ['Inspeção visual', [['vis1', 'Disjuntores e fios com as seções do projeto'], ['vis2', 'Cores certas: neutro azul-claro, terra verde ou verde-amarelo'], ['vis3', 'Quadro identificado (circuito de cada disjuntor)'], ['vis4', 'Sem emendas soltas nem fio exposto'], ['vis5', 'DR e DPS instalados onde o projeto pede']]],
+  ['Testes com instrumento', [['t1', 'Continuidade do condutor de proteção (terra) em todas as tomadas'], ['t2', 'Resistência de isolamento (megômetro) de cada circuito'], ['t3', 'Polaridade: fase no interruptor e no lugar certo da tomada'], ['t4', 'Tensão nas tomadas (127 ou 220 V conforme o projeto)'], ['t5', 'Resistência de aterramento medida e anotada']]],
+  ['Funcionamento', [['f1', 'Botão de teste do DR desarma'], ['f2', 'Cada disjuntor desliga só o seu circuito'], ['f3', 'Todas as lâmpadas e tomadas funcionando'], ['f4', 'Chuveiro e TUEs ligados sem aquecer cabos']]]
+];
+function mostrarInspecao() {
+  proj.inspecao = proj.inspecao || {};
+  const tot = INSPECAO.reduce((s, g) => s + g[1].length, 0), ok = Object.values(proj.inspecao).filter(Boolean).length;
+  abrirModal(`<h2>✅ Inspeção e testes</h2><div style="font-size:13px;opacity:.8;margin-bottom:8px">${ok} de ${tot} feitos. Antes de entregar, a NBR 5410 pede a verificação final da instalação: olhar tudo e testar com instrumento.</div>
+    ${INSPECAO.map(([g, it]) => `<h3 style="margin:12px 0 6px">${g}</h3>` + it.map(([k, t]) => `<label class="linha" style="gap:8px;padding:4px 0"><input type="checkbox" data-k="${k}" ${proj.inspecao[k] ? 'checked' : ''}> ${t}</label>`).join('')).join('')}
+    <details style="margin-top:10px"><summary>❓ Por que esses testes?</summary><div style="font-size:13px;line-height:1.5;margin-top:6px">📘 <b>O que a norma diz:</b> toda instalação nova, ampliada ou reformada passa por inspeção visual e ensaios antes de usar (NBR 5410, seção 7), e o resultado fica registrado.<br>🧮 <b>Como foi aplicado:</b> a lista junta os ensaios mais usados em residência. Anote os valores medidos em 📝 Notas.</div></details>
+    <div class="botoes"><button class="btn primario" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal;
+  document.querySelectorAll('[data-k]').forEach(b => b.onchange = () => { proj.inspecao[b.dataset.k] = b.checked; gravar(); });
+}
+
 // ---------- modal ----------
 function abrirModal(html) { $('#modalConteudo').innerHTML = html; $('#modal').classList.remove('escondido'); }
 function fecharModal() { $('#modal').classList.add('escondido'); $('#modalConteudo').innerHTML = ''; }
@@ -956,8 +973,8 @@ $('#btnComodos').onclick = () => {
     <table><tr><th>Nome</th><th>Tipo</th><th class="n">Área (m²)</th><th class="n">Perím. (m)</th><th class="n">Luz (VA)</th><th class="n">TUG</th><th class="n">TUG (VA)</th><th class="n">TUE (VA)</th></tr>${linhas}
     <tr class="total"><td>Total</td><td>${proj.comodos.length} cômodo(s)</td><td class="n">${fmt(ta)}</td><td class="n">—</td><td class="n">${tv}</td><td class="n">${tn}</td><td class="n">${tt}</td><td class="n">${te}</td></tr></table>
     <p class="aviso" style="margin-top:10px">Luz: mínimo pela NBR 5410 (1 ponto no teto por cômodo; 100 VA até 6 m², +60 VA a cada 4 m² inteiros). TUG: mínimo da NBR 5410 – máximo recomendado pelo app; VA calculado com o mínimo (600 VA nas 3 primeiras de cozinha, copa, área de serviço e banheiro; 100 VA nas demais). TUE: potência do aparelho; acima de 10 A na tensão do projeto (${tensao()} V), circuito exclusivo. Ferramenta de apoio: confira com profissional habilitado.</p>
-    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn primario" id="mTr">🎓 Treinar</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
-  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mRel').onclick = mostrarRelatorio; $('#mTr').onclick = treinar; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
+    <div class="botoes"><button class="btn primario" id="mDem">📊 Demanda da casa</button><button class="btn primario" id="mCirc">🔀 Circuitos</button><button class="btn primario" id="mQd">📋 Quadro de cargas</button><button class="btn primario" id="mMat">🧾 Materiais</button><button class="btn primario" id="mRel">📄 Relatório PDF</button><button class="btn primario" id="mTr">🎓 Treinar</button><button class="btn" id="mInsp">✅ Inspeção e testes</button><button class="btn" id="mImg">📷 Imagem da planta</button><button class="btn" id="mCanc">Fechar</button></div>`);
+  $('#mCanc').onclick = fecharModal; $('#mDem').onclick = mostrarDemanda; $('#mCirc').onclick = mostrarCircuitos; $('#mQd').onclick = mostrarQuadro; $('#mMat').onclick = mostrarMateriais; $('#mRel').onclick = mostrarRelatorio; $('#mTr').onclick = treinar; $('#mInsp').onclick = mostrarInspecao; $('#mImg').onclick = () => { fecharModal(); exportarImagem(); };
   $('#modalConteudo').querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { fecharModal(); definirModo('selecionar'); sel = { comodo: tr.dataset.id, parede: null }; render(); });
 };
 
@@ -1588,7 +1605,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=46').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=47').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
