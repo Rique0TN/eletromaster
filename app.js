@@ -1456,7 +1456,7 @@ function tutorial(i = 0) {
   $('#tuProx').onclick = () => ult ? fim() : tutorial(i + 1);
 }
 $('#btnTutorial').onclick = () => tutorial(0);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=38').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=39').catch(() => {});
 
 // ---------- exportar imagem (PNG) da planta ----------
 function exportarImagem() {
@@ -1479,3 +1479,7 @@ function exportarImagem() {
   img.onerror = () => aviso('Não consegui gerar a imagem.');
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
 }
+
+// v39: bloqueia o zoom por toque duplo do iPhone (fica só o de pinça na planta)
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });

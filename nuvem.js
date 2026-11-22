@@ -38,7 +38,18 @@
   function entrar() {
     if (!auth) { aviso('Sem conexão com o login agora.'); return; }
     const p = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(p).catch(e => { if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) auth.signInWithRedirect(p); else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') aviso('Não deu para entrar agora.'); });
+    auth.signInWithPopup(p).catch(e => { if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment' || e.code === 'auth/web-storage-unsupported')) abrirNoSafari(); else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') aviso('Não deu para entrar agora.'); });
+  }
+
+  // v39: navegador de dentro do WhatsApp/Instagram bloqueia o login do Google → pedir pra abrir no Safari
+  function abrirNoSafari() {
+    const url = 'https://rique0tn.github.io/eletromaster/';
+    if (typeof abrirModal !== 'function') { aviso('Abra o site no Safari pra entrar com Google.'); return; }
+    abrirModal(`<h2>🔐 Abra no Safari pra entrar</h2>
+      <div style="font-size:15px;line-height:1.5;margin:8px 0 12px">O navegador de dentro do WhatsApp (e do Instagram) não deixa o Google fazer login. No Safari funciona.<br><br>1. Toque em <b>•••</b> ou no ícone da bússola, lá embaixo.<br>2. Escolha <b>Abrir no Safari</b> (ou <b>Abrir no navegador</b>).<br>3. Toque em <b>Entrar com Google</b> de novo.</div>
+      <div class="botoes"><button class="btn" id="mCanc">Fechar</button><button class="btn primario" id="mCopLink">📋 Copiar link</button></div>`);
+    document.getElementById('mCanc').onclick = fecharModal;
+    document.getElementById('mCopLink').onclick = () => { try { navigator.clipboard.writeText(url).then(() => aviso('Link copiado! Cole no Safari.')); } catch (e) { aviso(url); } };
   }
 
   // ---------- lobby ----------
